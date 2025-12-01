@@ -60,47 +60,7 @@
 
         <!-- Main Dashboard -->
         <main>
-            <!-- Add API Key Form -->
-            <div class="bg-white rounded-2xl shadow-lg p-6 mb-8 fade-in">
-                <div class="flex items-center mb-4">
-                    <div class="w-10 h-10 gradient-bg rounded-lg flex items-center justify-center mr-3">
-                        <i class="fas fa-key text-white text-lg"></i>
-                    </div>
-                    <h2 class="text-xl font-bold text-gray-800">Add OpenAI Admin Key</h2>
-                </div>
-                
-                <p class="text-gray-600 mb-6">Add your OpenAI Admin key to monitor usage spend. Keys are stored locally in your browser.</p>
-                
-                <form id="apiKeyForm" class="space-y-4">
-                    <div>
-                        <label for="accountName" class="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
-                        <input 
-                            type="text" 
-                            id="accountName" 
-                            placeholder="e.g., Work Account, Personal Account" 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                            required
-                        >
-                    </div>
-                    
-                    <div>
-                        <label for="adminKey" class="block text-sm font-medium text-gray-700 mb-1">OpenAI Admin Key (optional)</label>
-                        <input 
-                            type="password" 
-                            id="adminKey" 
-                            placeholder="Admin key for organization costs API" 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent api-key-input"
-                        >
-                        <p class="text-xs text-gray-500 mt-1">If provided, usage is fetched from <code>/v1/organization/costs</code>. This often requires elevated privileges and may be subject to CORS.</p>
-                    </div>
-                    
-                    <div class="flex justify-end">
-                        <button type="submit" class="gradient-bg text-white font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-opacity flex items-center">
-                            <i class="fas fa-plus mr-2"></i> Add Admin Key
-                        </button>
-                    </div>
-                </form>
-            </div>
+            <!-- Add Key Form moved to modal to save space -->
 
             <!-- API Key List & Balances -->
             <div id="dashboardSection" class="bg-white rounded-2xl shadow-lg p-6">
@@ -112,6 +72,10 @@
                         <h2 class="text-xl font-bold text-gray-800">API Key Dashboard</h2>
                     </div>
                     <div class="flex items-center space-x-2">
+                        <button id="openAddKeyModal" class="gradient-bg text-white font-medium py-2 px-3 rounded-lg hover:opacity-90 transition-opacity flex items-center">
+                            <i class="fas fa-plus mr-2"></i>
+                            Add Key
+                        </button>
                         <button id="openRangeModal" class="bg-white border border-gray-200 text-gray-700 font-medium py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors flex items-center">
                             <i class="fas fa-calendar-alt mr-2"></i>
                             <span id="currentRangeLabel">Last 7 days</span>
@@ -128,8 +92,8 @@
                         <div class="text-gray-400 mb-4">
                             <i class="fas fa-key fa-3x"></i>
                         </div>
-                        <h3 class="text-lg font-medium text-gray-600 mb-2">No API Keys Added Yet</h3>
-                        <p class="text-gray-500">Add your first OpenAI API key above to get started.</p>
+                        <h3 class="text-lg font-medium text-gray-600 mb-2">No Keys Added Yet</h3>
+                        <p class="text-gray-500">Click “Add Key” to get started.</p>
                     </div>
                 </div>
                 
@@ -155,6 +119,10 @@
                     <div class="ml-4">
                         <h3 class="text-lg font-medium text-blue-800 mb-2">Important Information</h3>
                         <ul class="text-blue-700 space-y-3">
+                            <li class="flex items-start"></li>
+                                <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
+                                <span>Get an organization Admin Key at <a href="https://platform.openai.com/settings/organization/admin-keys" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">OpenAI Admin Keys</a>.</span>
+                            </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
                                 <span>This app sums usage via <code>/v1/organization/costs</code> using an Admin Key. It queries a date range (start_time inclusive, end_time exclusive); for long ranges it may chunk by 7 days. Cards show total <strong>Used</strong> only.</span>
@@ -227,6 +195,34 @@
                 <button id="cancelRange" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button id="saveRange" class="px-4 py-2 rounded-lg gradient-bg text-white">Save</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Add Key Modal -->
+    <div id="addKeyModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">Add Admin Key</h3>
+                <button id="closeAddKeyModal" class="text-gray-500 hover:text-gray-700"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-sm text-gray-600 mb-4">Keys are stored locally and only sent to OpenAI.</p>
+            <form id="apiKeyForm" class="space-y-4">
+                <div>
+                    <label for="accountName" class="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
+                    <input type="text" id="accountName" placeholder="e.g., Work Account" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" required>
+                </div>
+                <div>
+                    <label for="adminKey" class="block text-sm font-medium text-gray-700 mb-1">OpenAI Admin Key</label>
+                    <input type="password" id="adminKey" placeholder="Admin key for organization costs API" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent api-key-input" required>
+                    <p class="text-xs text-gray-500 mt-1">Uses <code>/v1/organization/costs</code> with start_time/end_time.</p>
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" id="cancelAddKey" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="submit" class="gradient-bg text-white font-medium py-2 px-6 rounded-lg hover:opacity-90 transition-opacity flex items-center">
+                        <i class="fas fa-plus mr-2"></i> Save Key
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
     <script src="app.js"></script>

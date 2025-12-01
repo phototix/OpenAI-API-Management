@@ -6,6 +6,10 @@ const els = {
   form: document.getElementById("apiKeyForm"),
   name: document.getElementById("accountName"),
   adminKey: document.getElementById("adminKey"),
+  addKeyModal: document.getElementById("addKeyModal"),
+  openAddKeyModal: document.getElementById("openAddKeyModal"),
+  closeAddKeyModal: document.getElementById("closeAddKeyModal"),
+  cancelAddKey: document.getElementById("cancelAddKey"),
   accounts: document.getElementById("accountsContainer"),
   noAccounts: document.getElementById("noAccountsMessage"),
   refreshAll: document.getElementById("refreshAll"),
@@ -418,6 +422,7 @@ function initEvents() {
       const id = addAccount(name, adminKey);
       els.name.value = "";
       if (els.adminKey) els.adminKey.value = "";
+      if (els.addKeyModal) els.addKeyModal.classList.add("hidden");
       render();
       await refreshOne(id, true);
     });
@@ -452,6 +457,17 @@ function initEvents() {
   });
 
   // Range modal events
+  if (els.openAddKeyModal && els.addKeyModal) {
+    els.openAddKeyModal.addEventListener("click", () => {
+      els.addKeyModal.classList.remove("hidden");
+    });
+  }
+  if (els.closeAddKeyModal) {
+    els.closeAddKeyModal.addEventListener("click", () => els.addKeyModal.classList.add("hidden"));
+  }
+  if (els.cancelAddKey) {
+    els.cancelAddKey.addEventListener("click", () => els.addKeyModal.classList.add("hidden"));
+  }
   if (els.openRangeModal && els.rangeModal) {
     els.openRangeModal.addEventListener("click", () => {
       // set radio to current
