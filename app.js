@@ -168,7 +168,7 @@ function setRangeSetting(v) {
 }
 
 function updateRangeLabel() {
-  const map = { "1d": "Today", "7d": "Last 7 days", "1m": "Last 1 month", "3m": "Last 3 months" };
+  const map = { "1d": "Today", "3d": "Last 3 days", "7d": "Last 7 days", "1m": "Last 1 month" };
   if (els.currentRangeLabel) els.currentRangeLabel.textContent = map[getRangeSetting()] || "Custom";
 }
 
@@ -178,12 +178,12 @@ function computeRangeDates(range = getRangeSetting()) {
   const start = new Date(end);
   if (range === "1d") {
     // same day
+  } else if (range === "3d") {
+    start.setDate(start.getDate() - 2);
   } else if (range === "7d") {
     start.setDate(start.getDate() - 6);
   } else if (range === "1m") {
     start.setMonth(start.getMonth() - 1);
-  } else if (range === "3m") {
-    start.setMonth(start.getMonth() - 3);
   } else {
     start.setDate(start.getDate() - 6);
   }

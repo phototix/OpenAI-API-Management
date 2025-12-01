@@ -129,7 +129,7 @@
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>Pick the time period with the calendar button (today, last 7 days, 1 month, or 3 months).</span>
+                                <span>Pick the time period with the calendar button (today, 3 days, 7 days, or 1 month).</span>
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
@@ -179,16 +179,16 @@
                     <span class="text-gray-800">1 day (today)</span>
                 </label>
                 <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="radio" name="usageRange" value="3d" class="mr-3">
+                    <span class="text-gray-800">3 days</span>
+                </label>
+                <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                     <input type="radio" name="usageRange" value="7d" class="mr-3">
                     <span class="text-gray-800">7 days (1 week)</span>
                 </label>
                 <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                     <input type="radio" name="usageRange" value="1m" class="mr-3">
                     <span class="text-gray-800">1 month</span>
-                </label>
-                <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                    <input type="radio" name="usageRange" value="3m" class="mr-3">
-                    <span class="text-gray-800">3 months</span>
                 </label>
             </div>
             <div class="mt-5 flex justify-end space-x-2">
