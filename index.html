@@ -119,29 +119,29 @@
                     <div class="ml-4">
                         <h3 class="text-lg font-medium text-blue-800 mb-2">Important Information</h3>
                         <ul class="text-blue-700 space-y-3">
-                            <li class="flex items-start"></li>
+                            <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>Get an organization Admin Key at <a href="https://platform.openai.com/settings/organization/admin-keys" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">OpenAI Admin Keys</a>.</span>
+                                <span>You need an OpenAI organization “Admin Key” to see usage. Open this page (tap to open) and create one: <a href="https://platform.openai.com/settings/organization/admin-keys" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">https://platform.openai.com/settings/organization/admin-keys</a>. Sign in, click “New Admin Key”, then copy the key. If you don’t have access, ask your organization admin.</span>
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>This app sums usage via <code>/v1/organization/costs</code> using an Admin Key. It queries a date range (start_time inclusive, end_time exclusive); for long ranges it may chunk by 7 days. Cards show total <strong>Used</strong> only.</span>
+                                <span>Click “Add Key”, give the account a name (any label you like), paste your Admin Key, and save.</span>
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>Keys are stored locally in your browser (localStorage) and are only sent to OpenAI's API from your device. You can remove them anytime using “Clear All Keys”.</span>
+                                <span>Pick the time period with the calendar button (today, last 7 days, 1 month, or 3 months).</span>
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>Browser requests may be blocked by CORS. If needed, run a local proxy and set <code>localStorage.setItem('openai_cors_proxy', 'http://localhost:8787')</code> in the console.</span>
+                                <span>Press “Refresh All” to update. Each card shows how much was used during the time you chose.</span>
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>How to use: (1) Enter an account name and Admin Key. (2) Pick a range via the calendar button. (3) Click “Refresh All”. You can add multiple accounts/keys.</span>
+                                <span>Your key is saved only on your device (in your browser). You can remove everything anytime with “Clear All Keys”.</span>
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>Where to get a key: Create a key in the OpenAI Platform (API Keys) using a user with organization admin privileges, so it can access organization costs.</span>
+                                <span>If data doesn’t load, try another browser or ask your IT/admin for help.</span>
                             </li>
                         </ul>
                     </div>
