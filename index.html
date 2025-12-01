@@ -154,18 +154,26 @@
                     </div>
                     <div class="ml-4">
                         <h3 class="text-lg font-medium text-blue-800 mb-2">Important Information</h3>
-                        <ul class="text-blue-700 space-y-2">
+                        <ul class="text-blue-700 space-y-3">
                             <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>OpenAI API does <strong>not</strong> provide a direct endpoint to check credit balances. This dashboard uses the billing usage API to estimate remaining credits.</span>
+                                <span>This app sums usage via <code>/v1/organization/costs</code> using an Admin Key. It queries a date range (start_time inclusive, end_time exclusive); for long ranges it may chunk by 7 days. Cards show total <strong>Used</strong> only.</span>
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>API keys are stored in your browser's local storage and never leave your device.</span>
+                                <span>Keys are stored locally in your browser (localStorage) and are only sent to OpenAI's API from your device. You can remove them anytime using “Clear All Keys”.</span>
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>To get accurate credit information, you need to visit the <a href="https://platform.openai.com/account/usage" target="_blank" class="underline font-medium">OpenAI Usage Dashboard</a> for each account.</span>
+                                <span>Browser requests may be blocked by CORS. If needed, run a local proxy and set <code>localStorage.setItem('openai_cors_proxy', 'http://localhost:8787')</code> in the console.</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
+                                <span>How to use: (1) Enter an account name and Admin Key. (2) Pick a range via the calendar button. (3) Click “Refresh All”. You can add multiple accounts/keys.</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
+                                <span>Where to get a key: Create a key in the OpenAI Platform (API Keys) using a user with organization admin privileges, so it can access organization costs.</span>
                             </li>
                         </ul>
                     </div>
