@@ -111,6 +111,9 @@ function accountCardHTML(a) {
   const teamBadge = vendor === "grok" && a.teamId
     ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">Team: ${a.teamId}</span>`
     : "";
+  const extraInfo = vendor === "grok" && a.teamId
+    ? `Team: ${a.teamId}`
+    : ""; // Future: show Org ID if stored for OpenAI
   return `
     <div class="balance-card border border-gray-200 rounded-xl p-5 fade-in">
       <div class="flex items-start justify-between">
@@ -121,6 +124,7 @@ function accountCardHTML(a) {
             <div class="text-sm text-gray-500">${maskKey(secretForLabel)}</div>
           </div>
           <h3 class="text-lg font-semibold text-gray-800 mt-2">${a.name}</h3>
+          ${extraInfo ? `<div class="text-xs text-gray-500 mt-1">${extraInfo}</div>` : ""}
         </div>
       </div>
 
