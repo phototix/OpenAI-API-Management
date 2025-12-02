@@ -5,7 +5,10 @@ const RANGE_KEY = "openai_usage_range"; // '1d' | '7d' | '1m' | '3m'
 const els = {
   form: document.getElementById("apiKeyForm"),
   name: document.getElementById("accountName"),
+  vendor: document.getElementById("vendorSelect"),
   adminKey: document.getElementById("adminKey"),
+  teamId: document.getElementById("teamId"),
+  teamIdRow: document.getElementById("teamIdRow"),
   addKeyModal: document.getElementById("addKeyModal"),
   openAddKeyModal: document.getElementById("openAddKeyModal"),
   closeAddKeyModal: document.getElementById("closeAddKeyModal"),
@@ -43,10 +46,12 @@ function saveAccounts(list) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
 
-function addAccount(name, adminKey) {
+function addAccount(name, adminKey, vendor = "openai", extra = {}) {
   const list = getAccounts();
   const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
-  list.push({ id, name, adminKey: adminKey || "", lastUpdated: null, balance: null, error: null });
+  const account = { id, name, vendor: vendor || "openai", adminKey: adminKey || "", lastUpdated: null, balance: null, error: null };
+  if (vendor === "grok" && extra && extra.teamId) account.teamId = extra.teamId;
+  list.push(account);
   saveAccounts(list);
   return id;
 }
@@ -84,9 +89,13 @@ function showLoading(show) {
 }
 
 function accountCardHTML(a) {
+  const vendor = a.vendor || "openai";
   const hasBalance = !!(a && a.balance);
   const hasUsed = hasBalance && typeof a.balance.used === "number";
   const used = hasUsed ? a.balance.used : null;
+  const availableNum = hasBalance ? Number(a.balance.available) : NaN;
+  const hasAvailable = Number.isFinite(availableNum);
+  const available = hasAvailable ? availableNum : null;
   const updated = a.lastUpdated ? new Date(a.lastUpdated).toLocaleString() : "Never";
   const err = a.error ? String(a.error) : "";
 
@@ -97,6 +106,7 @@ function accountCardHTML(a) {
         <div>
           <div class="text-sm text-gray-500">${maskKey(secretForLabel)}</div>
           <h3 class="text-lg font-semibold text-gray-800 mt-1">${a.name}</h3>
+          <div class="text-xs text-gray-500 mt-1">Vendor: ${vendor.toUpperCase()}${vendor === "grok" && a.teamId ? ` • Team: ${a.teamId}` : ""}</div>
         </div>
         <div class="flex items-center space-x-2">
           <button data-action="refresh" data-id="${a.id}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-sync-alt mr-1"></i> Refresh</button>
@@ -105,10 +115,17 @@ function accountCardHTML(a) {
       </div>
 
       <div class="mt-4 grid grid-cols-1 gap-3">
-        <div class="bg-gray-50 rounded-lg p-4 text-center">
-          <div class="text-xs text-gray-500">Used (range)</div>
-          <div class="text-xl font-semibold text-gray-800">${hasUsed ? formatUSD(used) : "—"}</div>
-        </div>
+        ${vendor === "openai" ? `
+          <div class="bg-gray-50 rounded-lg p-4 text-center">
+            <div class="text-xs text-gray-500">Used (range)</div>
+            <div class="text-xl font-semibold text-gray-800">${hasUsed ? formatUSD(used) : "—"}</div>
+          </div>
+        ` : `
+          <div class="bg-gray-50 rounded-lg p-4 text-center">
+            <div class="text-xs text-gray-500">Available</div>
+            <div class="text-xl font-semibold text-gray-800">${hasAvailable ? formatUSD(available) : "—"}</div>
+          </div>
+        `}
       </div>
       <div class="mt-3 flex justify-end text-xs text-gray-500">
         <span>Updated: ${updated}</span>
@@ -152,6 +169,12 @@ function getProxyBase() {
   const v = localStorage.getItem(CORS_PROXY_KEY);
   if (!v) return "";
   return v.replace(/\/$/, "");
+}
+
+function getApiBase(host) {
+  const base = getProxyBase();
+  if (!base) return host;
+  return base; // proxy expected to forward to the appropriate host
 }
 
 function toISODate(d = new Date()) {
@@ -370,6 +393,126 @@ async function fetchUsageRangeWithAdminKey(adminKey, range = getRangeSetting()) 
   }
 }
 
+// Deepseek: simple balance endpoint. Returns available credit/balance.
+async function fetchDeepseekBalance(token) {
+  const host = "https://api.deepseek.com";
+  const base = getProxyBase();
+  const url = (base ? `${base}` : host) + "/user/balance";
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      mode: base ? "cors" : "cors",
+    },
+    20000
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    try { console.error("[Deepseek] balance error", { status: res.status, body: text }); } catch {}
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  try { console.log("[Deepseek] /user/balance payload", data); } catch {}
+  // Prefer USD entry if payload is an array of currency balances
+  let available = null;
+  let currency = null;
+  const toNumberMaybe = (x) => {
+    if (typeof x === "number") return x;
+    if (typeof x === "string") {
+      const n = Number(x.replace(/[,_\s]/g, ""));
+      return Number.isNaN(n) ? null : n;
+    }
+    return null;
+  };
+
+  if (Array.isArray(data)) {
+    const usd = data.find((e) => e && typeof e.currency === "string" && e.currency.toUpperCase() === "USD");
+    if (usd && typeof usd === "object") {
+      available =
+        toNumberMaybe(usd.total_balance) ??
+        toNumberMaybe(usd.available_balance) ??
+        toNumberMaybe(usd.remaining_balance) ??
+        toNumberMaybe(usd.balance);
+      currency = (usd.currency || "").toUpperCase();
+    }
+  }
+
+  // Handle object payload with `balance_infos` array
+  if (available === null && data && Array.isArray(data.balance_infos)) {
+    const usd = data.balance_infos.find((e) => e && typeof e.currency === "string" && e.currency.toUpperCase() === "USD");
+    const pick = usd || data.balance_infos[0];
+    if (pick && typeof pick === "object") {
+      available =
+        toNumberMaybe(pick.total_balance) ??
+        toNumberMaybe(pick.available_balance) ??
+        toNumberMaybe(pick.remaining_balance) ??
+        toNumberMaybe(pick.balance);
+      currency = (pick.currency || "").toUpperCase();
+    }
+  }
+
+  // If not array or USD not found, try common object field shapes
+  if (available === null) {
+    const tryFields = [
+      "available_balance",
+      "remaining_balance",
+      "balance",
+      "credit",
+      "total_balance",
+      "available",
+    ];
+    for (const f of tryFields) {
+      if (data && (typeof data[f] === "number" || typeof data[f] === "string")) { available = toNumberMaybe(data[f]); break; }
+      if (data && data.data && (typeof data.data[f] === "number" || typeof data.data[f] === "string")) { available = toNumberMaybe(data.data[f]); break; }
+    }
+    if (available === null && data && data.balance && (typeof data.balance.total === "number" || typeof data.balance.total === "string")) {
+      available = toNumberMaybe(data.balance.total);
+    }
+  }
+  try { console.log("[Deepseek] computed available", { available, currency, is_available: data && data.is_available }); } catch {}
+  return { granted: null, used: null, available };
+}
+
+// Grok (xAI): prepaid balance by team
+async function fetchGrokPrepaidBalance(token, teamId) {
+  if (!teamId) throw new Error("Missing Grok team ID");
+  const host = "https://management-api.x.ai";
+  const base = getProxyBase();
+  const url = (base ? `${base}` : host) + `/v1/billing/teams/${encodeURIComponent(teamId)}/prepaid/balance`;
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      mode: base ? "cors" : "cors",
+    },
+    20000
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    try { console.error("[Grok] prepaid balance error", { status: res.status, body: text }); } catch {}
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  try { console.log("[Grok] /v1/billing/teams/{team_id}/prepaid/balance payload", data); } catch {}
+  const raw = data && data.total && (data.total.val ?? data.total.value);
+  const n = typeof raw === "string" ? Number(raw) : (typeof raw === "number" ? raw : null);
+  // Heuristic: values are likely cents with negative sign; convert to positive USD available
+  let available = null;
+  if (typeof n === "number" && !Number.isNaN(n)) {
+    available = Math.abs(n) / 100;
+  }
+  return { granted: null, used: null, available };
+}
+
 // Removed session token path
 
 async function refreshOne(id, showModal) {
@@ -378,8 +521,15 @@ async function refreshOne(id, showModal) {
   if (showModal) showLoading(true);
   try {
     let bal;
+    const vendor = acct.vendor || "openai";
     if (acct.adminKey) {
-      bal = await fetchUsageRangeWithAdminKey(acct.adminKey);
+      if (vendor === "deepseek") {
+        bal = await fetchDeepseekBalance(acct.adminKey);
+      } else if (vendor === "grok") {
+        bal = await fetchGrokPrepaidBalance(acct.adminKey, acct.teamId);
+      } else {
+        bal = await fetchUsageRangeWithAdminKey(acct.adminKey);
+      }
     } else {
       throw new Error("No admin key found");
     }
@@ -400,7 +550,17 @@ async function refreshAllSequential() {
   showLoading(true);
   for (const a of list) {
     try {
-      const bal = a.adminKey ? await fetchUsageRangeWithAdminKey(a.adminKey) : { used: null };
+      let bal = { used: null };
+      if (a.adminKey) {
+        const vendor = a.vendor || "openai";
+        if (vendor === "deepseek") {
+          bal = await fetchDeepseekBalance(a.adminKey);
+        } else if (vendor === "grok") {
+          bal = await fetchGrokPrepaidBalance(a.adminKey, a.teamId);
+        } else {
+          bal = await fetchUsageRangeWithAdminKey(a.adminKey);
+        }
+      }
       updateAccount(a.id, { balance: bal, lastUpdated: Date.now(), error: null });
     } catch (e) {
       const errMsg = String(e && e.message ? e.message : e);
@@ -418,14 +578,21 @@ function initEvents() {
       e.preventDefault();
       const name = (els.name.value || "").trim();
       const adminKey = (els.adminKey && els.adminKey.value || "").trim();
+      const vendor = (els.vendor && els.vendor.value) || "openai";
+      const teamId = (els.teamId && els.teamId.value || "").trim();
       if (!name) return;
       if (!adminKey) {
-        alert("Provide an Admin Key.");
+        alert("Provide an API key.");
         return;
       }
-      const id = addAccount(name, adminKey);
+      if (vendor === "grok" && !teamId) {
+        alert("Provide the Grok Team ID.");
+        return;
+      }
+      const id = addAccount(name, adminKey, vendor, { teamId });
       els.name.value = "";
       if (els.adminKey) els.adminKey.value = "";
+      if (els.teamId) els.teamId.value = "";
       if (els.addKeyModal) els.addKeyModal.classList.add("hidden");
       render();
       await refreshOne(id, true);
@@ -524,6 +691,18 @@ function initEvents() {
 
   // Expose for init to open on load
   initEvents.openInfo = openInfo;
+
+  // Vendor change: toggle Grok Team ID field
+  if (els.vendor) {
+    const onVendorChange = () => {
+      const v = els.vendor.value;
+      const showTeam = v === "grok";
+      if (els.teamIdRow) els.teamIdRow.classList.toggle("hidden", !showTeam);
+    };
+    els.vendor.addEventListener("change", onVendorChange);
+    // Initialize visibility
+    onVendorChange();
+  }
 }
 
 function init() {

@@ -1,13 +1,13 @@
-# OpenAI API Credit Dashboard (OpenAI API Management)
+# API Credit Dashboard (Multi‑Vendor)
 
-A lightweight, mobile‑friendly, client‑side dashboard to track OpenAI organization usage (costs) with your Admin Key. No backend needed — keys are stored locally in your browser and requests go directly to OpenAI’s `/v1/organization/costs` API.
+A lightweight, mobile‑friendly, client‑side dashboard to track balances and usage across providers. No backend needed — keys are stored locally in your browser and requests go directly to each provider’s API (or your optional CORS proxy).
 
-Ideal for teams and power users who want a simple OpenAI usage tracker, billing monitor, and multi‑account overview in one place.
+Start with OpenAI usage (organization costs), Deepseek balance, and Grok (xAI) prepaid balance. Designed for a simple multi‑account overview in one place.
 
 ## Features
 
-- Multiple accounts: Add and label multiple OpenAI accounts/orgs.
-- Usage ranges: Today, last 3 days, 7 days, or 1 month.
+- Multiple accounts: Add and label multiple provider accounts.
+- Usage ranges (OpenAI): Today, last 3 days, 7 days, or 1 month.
 - One‑click refresh: Update all cards at once.
 - Private by design: Data saved in `localStorage`; nothing sent to third‑party servers.
 - CORS proxy support: Optional proxy base to bypass browser CORS restrictions.
@@ -15,7 +15,7 @@ Ideal for teams and power users who want a simple OpenAI usage tracker, billing 
 
 ## How It Works
 
-This app calls OpenAI’s organization costs endpoint with a date range:
+For OpenAI, this app calls the organization costs endpoint with a date range:
 
 - Endpoint: `GET https://api.openai.com/v1/organization/costs?start_time=UNIX&end_time=UNIX`
 - Auth: Bearer token using an OpenAI Organization Admin Key
@@ -23,6 +23,18 @@ This app calls OpenAI’s organization costs endpoint with a date range:
 - Fallbacks: If a wide range fails, it retries in chunks (weekly, then daily) to ensure results
 
 Only the amount “Used” is shown for the selected time range. Granted/available credits are not fetched by this tool.
+
+For Deepseek, this app calls the balance endpoint:
+
+- Endpoint: `GET https://api.deepseek.com/user/balance`
+- Auth: Bearer token using your Deepseek API key
+- Displayed: Available balance (in USD if provided by API)
+
+For Grok (xAI), this app calls the prepaid balance endpoint for a team:
+
+- Endpoint: `GET https://management-api.x.ai/v1/billing/teams/{team_id}/prepaid/balance`
+- Auth: Bearer token (your xAI management API key)
+- Displayed: Available prepaid balance (converted from cents)
 
 ## Quick Start
 
@@ -53,16 +65,39 @@ You can also use any static server you prefer (e.g., `npx serve`, VS Code Live S
 
 ## Using the Dashboard
 
-1. Create an OpenAI Organization Admin Key:
+1. Choose a provider and provide the corresponding API key.
+
+  OpenAI:
    - https://platform.openai.com/settings/organization/admin-keys
-2. Click “Add Key”, give it a name, paste your Admin Key, and save.
-3. Pick a usage range with the calendar button (Today/3d/7d/1m).
-4. Click “Refresh All” to fetch and display usage totals.
+  Deepseek:
+  - Use your Deepseek API key (Bearer) for the balance endpoint.
+
+2. Click “Add Key”, pick the provider, name it, paste the key, and save.
+3. For OpenAI, pick a usage range with the calendar button (Today/3d/7d/1m). Deepseek ignores the range and shows current available balance.
+4. Click “Refresh All” to fetch and display totals.
 5. Keys and labels are stored only in your browser; use “Clear All Keys” to remove.
+
+## Providers
+
+- OpenAI
+  - Key: Organization Admin Key
+  - Endpoint: `/v1/organization/costs?start_time&end_time`
+  - Display: Used amount over selected range
+
+- Deepseek
+  - Key: API key (Bearer)
+  - Endpoint: `GET https://api.deepseek.com/user/balance`
+  - Display: Available balance (currency as provided by API)
+
+- Grok (xAI)
+  - Key: API key (Bearer)
+  - Team ID: Required (e.g., `65c1e471-205f-4566-9c5a-07198bcdf4ce`)
+  - Endpoint: `GET https://management-api.x.ai/v1/billing/teams/{team_id}/prepaid/balance`
+  - Display: Available prepaid balance (USD), parsed from `total.val` (assumed cents)
 
 ## CORS: When to Use a Proxy
 
-OpenAI may not send CORS headers for all origins. If you see “Failed to fetch” or network/CORS errors, set a proxy base that forwards to `https://api.openai.com`:
+Some providers may not send CORS headers for all origins. If you see “Failed to fetch” or network/CORS errors, set a proxy base (stored in localStorage) and have it forward to the target API host (OpenAI or Deepseek):
 
 - App setting (stored in your browser `localStorage`):
 
@@ -70,9 +105,9 @@ OpenAI may not send CORS headers for all origins. If you see “Failed to fetch�
 localStorage.setItem('openai_cors_proxy', 'https://your-proxy.example');
 ```
 
-The app will prepend this base to OpenAI URLs. Your proxy should:
+The app will prepend this base to provider URLs. Your proxy should:
 
-- Forward path/query to `https://api.openai.com`
+- Forward path/query to the intended host (`https://api.openai.com`, `https://api.deepseek.com`, or `https://management-api.x.ai`)
 - Add `Access-Control-Allow-Origin: *` (or your domain)
 - Pass through `Authorization: Bearer ...`
 - Use HTTPS
@@ -83,6 +118,8 @@ Example Cloudflare Worker (minimal, for reference only):
 export default {
   async fetch(request) {
     const url = new URL(request.url);
+    // Optionally constrain to one host; or route based on path/header
+    // Example below forwards to OpenAI unconditionally. For Deepseek, set `api.deepseek.com` accordingly.
     url.hostname = 'api.openai.com';
     url.protocol = 'https:';
     const init = {
@@ -102,7 +139,7 @@ Security note: Never use public/unknown proxies with secrets. Run your own (Clou
 
 ## Configuration (Local Storage Keys)
 
-- `openai_accounts_v1`: Array of saved accounts `{ id, name, adminKey, lastUpdated, balance, error }`.
+- `openai_accounts_v1`: Array of saved accounts `{ id, name, vendor, adminKey, lastUpdated, balance, error }`.
 - `openai_cors_proxy`: Optional base URL to a CORS‑enabled reverse proxy.
 - `openai_usage_range`: One of `1d`, `3d`, `7d`, `1m`.
 
@@ -132,7 +169,7 @@ OpenAI-API-Management/
 
 ## SEO Keywords
 
-OpenAI API usage tracker, OpenAI billing dashboard, OpenAI costs monitor, OpenAI organization usage, OpenAI Admin Key, client-side OpenAI dashboard, OpenAI usage analytics, OpenAI API management, OpenAI spend tracker, OpenAI billing API.
+OpenAI usage tracker, OpenAI billing dashboard, Deepseek balance checker, multi-vendor API dashboard, OpenAI organization usage, Admin Key, client-side dashboard, API usage analytics, API management, spend tracker, billing API.
 
 ## Developer Disclaimer (Code-of-Scale)
 

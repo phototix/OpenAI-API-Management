@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenAI API Credit Dashboard</title>
+    <title>API Credit Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
@@ -47,9 +47,9 @@
         <!-- Header -->
         <header class="mb-10 text-center">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
-                <i class="fas fa-robot text-purple-600 mr-3"></i>OpenAI API Credit Dashboard
+                <i class="fas fa-robot text-purple-600 mr-3"></i>API Credit Dashboard
             </h1>
-            <p class="text-gray-600">Monitor credit balances for multiple OpenAI accounts</p>
+            <p class="text-gray-600">Monitor balances across multiple providers</p>
             <div class="mt-4 flex justify-center">
                 <div class="inline-flex items-center bg-blue-100 text-blue-800 text-sm font-medium px-4 py-2 rounded-full">
                     <i class="fas fa-mobile-alt mr-2"></i>
@@ -128,7 +128,7 @@
         <div class="bg-white rounded-xl p-8 max-w-sm w-full mx-4 text-center">
             <div class="loading-spinner w-12 h-12 border-4 border-gray-300 rounded-full mx-auto mb-4"></div>
             <h3 class="text-lg font-medium text-gray-800 mb-2">Fetching Balance</h3>
-            <p class="text-gray-600">Please wait while we retrieve your credit information...</p>
+            <p class="text-gray-600">Please wait while we retrieve your balance...</p>
         </div>
     </div>
 
@@ -136,7 +136,7 @@
     <div id="rangeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
         <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-800">Select Usage Range</h3>
+                <h3 class="text-lg font-semibold text-gray-800">Select Usage Range (OpenAI)</h3>
                 <button id="closeRangeModal" class="text-gray-500 hover:text-gray-700"><i class="fas fa-times"></i></button>
             </div>
             <p class="text-sm text-gray-600 mb-4">Choose how much history to fetch from billing usage.</p>
@@ -169,19 +169,31 @@
     <div id="addKeyModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
         <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-800">Add Admin Key</h3>
+                <h3 class="text-lg font-semibold text-gray-800">Add API Key</h3>
                 <button id="closeAddKeyModal" class="text-gray-500 hover:text-gray-700"><i class="fas fa-times"></i></button>
             </div>
-            <p class="text-sm text-gray-600 mb-4">Keys are stored locally and only sent to OpenAI.</p>
+            <p class="text-sm text-gray-600 mb-4">Keys are stored locally and only sent to the selected provider.</p>
             <form id="apiKeyForm" class="space-y-4">
+                <div>
+                    <label for="vendorSelect" class="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+                    <select id="vendorSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <option value="openai">OpenAI</option>
+                        <option value="deepseek">Deepseek</option>
+                        <option value="grok">Grok (xAI)</option>
+                    </select>
+                </div>
                 <div>
                     <label for="accountName" class="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
                     <input type="text" id="accountName" placeholder="e.g., Work Account" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" required>
                 </div>
+                <div id="teamIdRow" class="hidden">
+                    <label for="teamId" class="block text-sm font-medium text-gray-700 mb-1">Team ID (Grok)</label>
+                    <input type="text" id="teamId" placeholder="e.g., 65c1e471-205f-4566-9c5a-07198bcdf4ce" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                </div>
                 <div>
-                    <label for="adminKey" class="block text-sm font-medium text-gray-700 mb-1">OpenAI Admin Key</label>
-                    <input type="password" id="adminKey" placeholder="Admin key for organization costs API" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent api-key-input" required>
-                    <p class="text-xs text-gray-500 mt-1">Uses <code>/v1/organization/costs</code> with start_time/end_time.</p>
+                    <label for="adminKey" class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                    <input type="password" id="adminKey" placeholder="Paste your API key for the selected provider" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent api-key-input" required>
+                    <p class="text-xs text-gray-500 mt-1">OpenAI: uses <code>/v1/organization/costs</code> with start_time/end_time. Deepseek: uses <code>GET https://api.deepseek.com/user/balance</code>. Grok (xAI): uses <code>GET https://management-api.x.ai/v1/billing/teams/{team_id}/prepaid/balance</code>.</p>
                 </div>
                 <div class="flex justify-end space-x-2">
                     <button type="button" id="cancelAddKey" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Cancel</button>
@@ -209,27 +221,27 @@
                 <ul class="space-y-3">
                     <li class="flex items-start">
                         <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                        <span>You need an OpenAI organization “Admin Key” to see usage. Open this page (tap to open) and create one: <a href="https://platform.openai.com/settings/organization/admin-keys" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">https://platform.openai.com/settings/organization/admin-keys</a>. Sign in, click “New Admin Key”, then copy the key. If you don’t have access, ask your organization admin.</span>
+                        <span>Choose a Provider in “Add Key”. OpenAI shows “Used” for a selected range; Deepseek shows “Available” and ignores range.</span>
                     </li>
                     <li class="flex items-start">
                         <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                        <span>Click “Add Key”, give the account a name (any label you like), paste your Admin Key, and save.</span>
+                        <span>OpenAI usage requires an organization “Admin Key”. Create one here: <a href="https://platform.openai.com/settings/organization/admin-keys" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">https://platform.openai.com/settings/organization/admin-keys</a>.</span>
                     </li>
                     <li class="flex items-start">
                         <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                        <span>Pick the time period with the calendar button (today, 3 days, 7 days, or 1 month).</span>
+                        <span>Deepseek balance uses your API key and queries <code>GET https://api.deepseek.com/user/balance</code>.</span>
                     </li>
                     <li class="flex items-start">
                         <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                        <span>Press “Refresh All” to update. Each card shows how much was used during the time you chose.</span>
+                        <span>Click “Add Key”, enter a name, paste the key, save, then use “Refresh All”.</span>
                     </li>
                     <li class="flex items-start">
                         <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                        <span>Your key is saved only on your device (in your browser). You can remove everything anytime with “Clear All Keys”.</span>
+                        <span>Keys are stored only on your device. Remove everything with “Clear All Keys”.</span>
                     </li>
                     <li class="flex items-start">
                         <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                        <span>If data doesn’t load, try another browser or ask your IT/admin for help.</span>
+                        <span>Seeing CORS/network errors? Set a proxy in your browser console: <code>localStorage.setItem('openai_cors_proxy','https://your-proxy.example')</code> and have it forward to the provider API.</span>
                     </li>
                 </ul>
                 <div class="mt-5 text-right">
