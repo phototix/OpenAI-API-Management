@@ -120,7 +120,6 @@ function accountCardHTML(a) {
         <div class="w-full">
           <div class="flex items-center flex-wrap gap-2">
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${vendorBadgeClass}">${vendorName}</span>
-            ${teamBadge}
             <div class="text-sm text-gray-500">${maskKey(secretForLabel)}</div>
           </div>
           <h3 class="text-lg font-semibold text-gray-800 mt-2">${a.name}</h3>
