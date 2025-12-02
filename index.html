@@ -70,6 +70,9 @@
                             <i class="fas fa-chart-line text-white text-lg"></i>
                         </div>
                         <h2 class="text-xl font-bold text-gray-800">API Key Dashboard</h2>
+                        <button id="openInfoModal" class="ml-3 text-gray-500 hover:text-gray-700" aria-label="View information">
+                            <i class="fas fa-circle-question text-lg"></i>
+                        </button>
                     </div>
                     <div class="flex items-center space-x-2">
                         <button id="openAddKeyModal" class="gradient-bg text-white font-medium py-2 px-3 rounded-lg hover:opacity-90 transition-opacity flex items-center">
@@ -110,43 +113,7 @@
                 </div>
             </div>
 
-            <!-- Information Section -->
-            <div class="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-5 fade-in">
-                <div class="flex items-start">
-                    <div class="flex-shrink-0 mt-1">
-                        <i class="fas fa-info-circle text-blue-500 text-xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <h3 class="text-lg font-medium text-blue-800 mb-2">Important Information</h3>
-                        <ul class="text-blue-700 space-y-3">
-                            <li class="flex items-start">
-                                <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>You need an OpenAI organization “Admin Key” to see usage. Open this page (tap to open) and create one: <a href="https://platform.openai.com/settings/organization/admin-keys" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">https://platform.openai.com/settings/organization/admin-keys</a>. Sign in, click “New Admin Key”, then copy the key. If you don’t have access, ask your organization admin.</span>
-                            </li>
-                            <li class="flex items-start">
-                                <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>Click “Add Key”, give the account a name (any label you like), paste your Admin Key, and save.</span>
-                            </li>
-                            <li class="flex items-start">
-                                <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>Pick the time period with the calendar button (today, 3 days, 7 days, or 1 month).</span>
-                            </li>
-                            <li class="flex items-start">
-                                <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>Press “Refresh All” to update. Each card shows how much was used during the time you chose.</span>
-                            </li>
-                            <li class="flex items-start">
-                                <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>Your key is saved only on your device (in your browser). You can remove everything anytime with “Clear All Keys”.</span>
-                            </li>
-                            <li class="flex items-start">
-                                <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
-                                <span>If data doesn’t load, try another browser or ask your IT/admin for help.</span>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
+            <!-- Information Modal Triggered on Load and by '?' icon -->
         </main>
 
         <!-- Footer -->
@@ -223,6 +190,52 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Information Modal -->
+    <div id="infoModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl p-6 max-w-2xl w-full mx-4">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center">
+                    <i class="fas fa-info-circle text-blue-500 text-xl mr-2"></i>
+                    <h3 class="text-lg font-semibold text-gray-800">Important Information</h3>
+                </div>
+                <button id="closeInfoModal" class="text-gray-500 hover:text-gray-700" aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="text-blue-700">
+                <ul class="space-y-3">
+                    <li class="flex items-start">
+                        <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
+                        <span>You need an OpenAI organization “Admin Key” to see usage. Open this page (tap to open) and create one: <a href="https://platform.openai.com/settings/organization/admin-keys" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">https://platform.openai.com/settings/organization/admin-keys</a>. Sign in, click “New Admin Key”, then copy the key. If you don’t have access, ask your organization admin.</span>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
+                        <span>Click “Add Key”, give the account a name (any label you like), paste your Admin Key, and save.</span>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
+                        <span>Pick the time period with the calendar button (today, 3 days, 7 days, or 1 month).</span>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
+                        <span>Press “Refresh All” to update. Each card shows how much was used during the time you chose.</span>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
+                        <span>Your key is saved only on your device (in your browser). You can remove everything anytime with “Clear All Keys”.</span>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fas fa-check-circle text-blue-500 mr-2 mt-1"></i>
+                        <span>If data doesn’t load, try another browser or ask your IT/admin for help.</span>
+                    </li>
+                </ul>
+                <div class="mt-5 text-right">
+                    <button id="dismissInfoModal" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Got it</button>
+                </div>
+            </div>
         </div>
     </div>
     <script src="app.js?version=1.0"></script>

@@ -134,6 +134,23 @@ OpenAI-API-Management/
 
 OpenAI API usage tracker, OpenAI billing dashboard, OpenAI costs monitor, OpenAI organization usage, OpenAI Admin Key, client-side OpenAI dashboard, OpenAI usage analytics, OpenAI API management, OpenAI spend tracker, OpenAI billing API.
 
+## Developer Disclaimer (Code-of-Scale)
+
+This project follows a "Code-of-Scale" approach to keep the app lightweight and privacy-first while allowing thoughtful growth. Use these guardrails when proposing or accepting changes:
+
+- Sensitive data local-only (baseline): Store API keys and any sensitive values only in browser storage APIs (`localStorage`/`sessionStorage`/`IndexedDB`). Never commit keys to source, never send them to third-party services, and avoid logging secrets.
+- Client-side first: Keep the core as a static, client-only app. Backends, databases, user accounts, or auth servers are out of scope unless explicitly opt-in and self-hosted.
+- Optional proxy only: A CORS proxy is user-supplied and optional. This repo will not ship or run a shared/hosted proxy. Documentation must clearly warn to self-host proxies.
+- Minimal surface area: No telemetry, analytics, cookies, or trackers. Avoid features that collect or centralize user data.
+- Opt-in growth: New capabilities should be additive, off by default, and degrade gracefully if unavailable. The default experience stays simple.
+- Modularity over complexity: Prefer small, composable utilities and clear seams. Keep `app.js` readable; place larger additions in separate modules/files when needed.
+- Security by default: Do not render untrusted HTML. Avoid exposing raw responses that may include secrets. Respect CSP when hosted. Never widen permissions without reason.
+- Performance budgets: Favor vanilla JS and small dependencies. Avoid heavy frameworks. Keep bundle size lean to preserve fast loads on mobile.
+- Accessibility and UX: Maintain keyboard access, contrast, and ARIA where appropriate. Prioritize clear, compact UI.
+- Storage compatibility: When changing `localStorage` keys or shapes, provide migrations and avoid breaking existing users.
+- Documentation first: Any new feature must document scope, security implications, and how to disable it. Mention if it affects privacy or storage.
+- Contribution guideline: PRs that significantly expand scope (accounts, billing management, server sync, analytics dashboards, etc.) may be declined to preserve project goals.
+
 ## Disclaimer
 
 This project is not affiliated with OpenAI. Use at your own risk and follow your organization’s security policies. Admin Keys are sensitive — store and use them responsibly.

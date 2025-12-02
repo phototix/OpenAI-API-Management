@@ -21,6 +21,10 @@ const els = {
   saveRange: document.getElementById("saveRange"),
   cancelRange: document.getElementById("cancelRange"),
   currentRangeLabel: document.getElementById("currentRangeLabel"),
+  infoModal: document.getElementById("infoModal"),
+  openInfoModal: document.getElementById("openInfoModal"),
+  closeInfoModal: document.getElementById("closeInfoModal"),
+  dismissInfoModal: document.getElementById("dismissInfoModal"),
 };
 
 function getAccounts() {
@@ -493,12 +497,45 @@ function initEvents() {
       await refreshAllSequential();
     });
   }
+
+  // Information modal events
+  const openInfo = () => { if (els.infoModal) els.infoModal.classList.remove("hidden"); };
+  const closeInfo = () => { if (els.infoModal) els.infoModal.classList.add("hidden"); };
+  if (els.openInfoModal && els.infoModal) {
+    els.openInfoModal.addEventListener("click", openInfo);
+  }
+  if (els.closeInfoModal) {
+    els.closeInfoModal.addEventListener("click", closeInfo);
+  }
+  if (els.dismissInfoModal) {
+    els.dismissInfoModal.addEventListener("click", closeInfo);
+  }
+  if (els.infoModal) {
+    els.infoModal.addEventListener("click", (e) => {
+      if (e.target === els.infoModal) closeInfo();
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && els.infoModal && !els.infoModal.classList.contains("hidden")) {
+      e.preventDefault();
+      if (els.closeInfoModal) els.closeInfoModal.click(); else els.infoModal.classList.add("hidden");
+    }
+  });
+
+  // Expose for init to open on load
+  initEvents.openInfo = openInfo;
 }
 
 function init() {
   render();
   initEvents();
   updateRangeLabel();
+  // Show information modal on every visit
+  if (typeof initEvents.openInfo === "function") {
+    initEvents.openInfo();
+  } else if (els.infoModal) {
+    els.infoModal.classList.remove("hidden");
+  }
 }
 
 document.addEventListener("DOMContentLoaded", init);
