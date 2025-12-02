@@ -190,10 +190,21 @@ function getProxyBase() {
   return v.replace(/\/$/, "");
 }
 
-function getApiBase(host) {
+// Build a URL that optionally routes via a CORS proxy.
+// Supported proxy base formats:
+//  - Base containing "{url}" placeholder: e.g. https://your-proxy.example.com?url={url}
+//  - Plain base: appends "?/proxy?url=" by default: https://your-proxy.example.com/proxy?url=<encoded target>
+//  - If no proxy configured, returns the direct host+path
+function buildProxiedUrl(host, path) {
   const base = getProxyBase();
-  if (!base) return host;
-  return base; // proxy expected to forward to the appropriate host
+  const full = host.replace(/\/$/, "") + path;
+  if (!base) return full;
+
+  if (base.includes("{url}")) {
+    return base.replace("{url}", encodeURIComponent(full));
+  }
+  // Default convention: base + "/proxy?url=" + encoded full URL
+  return base + (base.endsWith("/") ? "" : "/") + "proxy?url=" + encodeURIComponent(full);
 }
 
 function toISODate(d = new Date()) {
@@ -265,15 +276,17 @@ function toUnixStartOfNextDay(dateStr) {
 async function fetchOrgCostsDay(adminKey, dateStr) {
   const start = toUnixStartOfDay(dateStr);
   const endExclusive = toUnixStartOfNextDay(dateStr);
-  const base = getProxyBase();
-  const url = (base ? `${base}` : "https://api.openai.com") + `/v1/organization/costs?start_time=${encodeURIComponent(start)}&end_time=${encodeURIComponent(endExclusive)}`;
+  const url = buildProxiedUrl(
+    "https://api.openai.com",
+    `/v1/organization/costs?start_time=${encodeURIComponent(start)}&end_time=${encodeURIComponent(endExclusive)}`
+  );
   const res = await fetchWithTimeout(url, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${adminKey}`,
       "Content-Type": "application/json",
     },
-    mode: base ? "cors" : "cors",
+    mode: "cors",
   }, 20000);
 
   if (!res.ok) {
@@ -294,9 +307,8 @@ async function fetchOrgCostsRange(adminKey, startStr, endStr) {
   const start = toUnixStartOfDay(startStr);
   // end_time is exclusive; use start of the day after endStr
   const endExclusive = toUnixStartOfNextDay(endStr);
-  const base = getProxyBase();
-  const baseApi = base ? `${base}` : "https://api.openai.com";
-  let url = `${baseApi}/v1/organization/costs?start_time=${encodeURIComponent(start)}&end_time=${encodeURIComponent(endExclusive)}`;
+  const baseApi = "https://api.openai.com";
+  let url = buildProxiedUrl(baseApi, `/v1/organization/costs?start_time=${encodeURIComponent(start)}&end_time=${encodeURIComponent(endExclusive)}`);
 
   let total = 0;
   let pageCount = 0;
@@ -311,7 +323,7 @@ async function fetchOrgCostsRange(adminKey, startStr, endStr) {
           Authorization: `Bearer ${adminKey}`,
           "Content-Type": "application/json",
         },
-        mode: base ? "cors" : "cors",
+        mode: "cors",
       },
       20000
     );
@@ -344,11 +356,17 @@ async function fetchOrgCostsRange(adminKey, startStr, endStr) {
       const next = data.next_page;
       if (typeof next === "string") {
         if (/^https?:\/\//i.test(next)) {
-          url = next;
+          // When server returns absolute URL, re-wrap it via proxy if needed
+          try {
+            const u = new URL(next);
+            url = buildProxiedUrl(u.origin, u.pathname + (u.search || ""));
+          } catch {
+            url = buildProxiedUrl(baseApi, `/v1/organization/costs${next.startsWith("?") ? next : `?${next}`}`);
+          }
         } else if (next.startsWith("/")) {
-          url = baseApi.replace(/\/$/, "") + next;
+          url = buildProxiedUrl(baseApi, next);
         } else {
-          url = `${baseApi}/v1/organization/costs${next.startsWith("?") ? next : `?${next}`}`;
+          url = buildProxiedUrl(baseApi, `/v1/organization/costs${next.startsWith("?") ? next : `?${next}`}`);
         }
       } else {
         url = "";
@@ -415,8 +433,7 @@ async function fetchUsageRangeWithAdminKey(adminKey, range = getRangeSetting()) 
 // Deepseek: simple balance endpoint. Returns available credit/balance.
 async function fetchDeepseekBalance(token) {
   const host = "https://api.deepseek.com";
-  const base = getProxyBase();
-  const url = (base ? `${base}` : host) + "/user/balance";
+  const url = buildProxiedUrl(host, "/user/balance");
   const res = await fetchWithTimeout(
     url,
     {
@@ -425,7 +442,7 @@ async function fetchDeepseekBalance(token) {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
       },
-      mode: base ? "cors" : "cors",
+      mode: "cors",
     },
     20000
   );
@@ -517,8 +534,7 @@ async function fetchPublicIP() {
 async function fetchGrokPrepaidBalance(token, teamId) {
   if (!teamId) throw new Error("Missing Grok team ID");
   const host = "https://management-api.x.ai";
-  const base = getProxyBase();
-  const url = (base ? `${base}` : host) + `/v1/billing/teams/${encodeURIComponent(teamId)}/prepaid/balance`;
+  const url = buildProxiedUrl(host, `/v1/billing/teams/${encodeURIComponent(teamId)}/prepaid/balance`);
   const res = await fetchWithTimeout(
     url,
     {
@@ -527,7 +543,7 @@ async function fetchGrokPrepaidBalance(token, teamId) {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
       },
-      mode: base ? "cors" : "cors",
+      mode: "cors",
     },
     20000
   );
