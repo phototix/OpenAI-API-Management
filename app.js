@@ -100,13 +100,27 @@ function accountCardHTML(a) {
   const err = a.error ? String(a.error) : "";
 
   const secretForLabel = a.adminKey || "";
+  const vendorName = vendor === "openai" ? "OpenAI" : vendor === "deepseek" ? "Deepseek" : vendor === "grok" ? "Grok" : (vendor || "").toUpperCase();
+  const vendorBadgeClass = vendor === "openai"
+    ? "bg-purple-100 text-purple-800"
+    : vendor === "deepseek"
+    ? "bg-teal-100 text-teal-800"
+    : vendor === "grok"
+    ? "bg-amber-100 text-amber-800"
+    : "bg-gray-100 text-gray-800";
+  const teamBadge = vendor === "grok" && a.teamId
+    ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">Team: ${a.teamId}</span>`
+    : "";
   return `
     <div class="balance-card border border-gray-200 rounded-xl p-5 fade-in">
       <div class="flex items-start justify-between">
-        <div>
-          <div class="text-sm text-gray-500">${maskKey(secretForLabel)}</div>
-          <h3 class="text-lg font-semibold text-gray-800 mt-1">${a.name}</h3>
-          <div class="text-xs text-gray-500 mt-1">Vendor: ${vendor.toUpperCase()}${vendor === "grok" && a.teamId ? ` • Team: ${a.teamId}` : ""}</div>
+        <div class="w-full">
+          <div class="flex items-center flex-wrap gap-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${vendorBadgeClass}">${vendorName}</span>
+            ${teamBadge}
+            <div class="text-sm text-gray-500">${maskKey(secretForLabel)}</div>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-800 mt-2">${a.name}</h3>
         </div>
       </div>
 
