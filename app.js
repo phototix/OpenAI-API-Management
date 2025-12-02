@@ -478,6 +478,22 @@ async function fetchDeepseekBalance(token) {
   return { granted: null, used: null, available };
 }
 
+// Public IP helper (for Grok whitelist guidance)
+async function fetchPublicIP() {
+  try {
+    const res = await fetchWithTimeout(
+      "https://api.ipify.org?format=json",
+      { method: "GET", headers: { Accept: "application/json" }, mode: "cors" },
+      10000
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data?.ip === "string" ? data.ip : null;
+  } catch {
+    return null;
+  }
+}
+
 // Grok (xAI): prepaid balance by team
 async function fetchGrokPrepaidBalance(token, teamId) {
   if (!teamId) throw new Error("Missing Grok team ID");
@@ -535,8 +551,12 @@ async function refreshOne(id, showModal) {
     }
     updateAccount(id, { balance: bal, lastUpdated: Date.now(), error: null });
   } catch (e) {
-    const errMsg = String(e && e.message ? e.message : e);
+    let errMsg = String(e && e.message ? e.message : e);
     const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'openai_cors_proxy'" : "";
+    if ((acct.vendor || "openai") === "grok") {
+      const ip = await fetchPublicIP();
+      if (ip) errMsg += ` • Public IP: ${ip} (whitelist for Grok)`;
+    }
     updateAccount(id, { error: errMsg + corsHint, lastUpdated: Date.now() });
   } finally {
     render();
@@ -563,8 +583,12 @@ async function refreshAllSequential() {
       }
       updateAccount(a.id, { balance: bal, lastUpdated: Date.now(), error: null });
     } catch (e) {
-      const errMsg = String(e && e.message ? e.message : e);
+      let errMsg = String(e && e.message ? e.message : e);
       const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'openai_cors_proxy'" : "";
+      if ((a.vendor || "openai") === "grok") {
+        const ip = await fetchPublicIP();
+        if (ip) errMsg += ` • Public IP: ${ip} (whitelist for Grok)`;
+      }
       updateAccount(a.id, { error: errMsg + corsHint, lastUpdated: Date.now() });
     }
     render();
