@@ -142,8 +142,8 @@ function accountCardHTML(a) {
       </div>
       <div class="mt-3 flex items-center justify-between">
         <div class="flex items-center space-x-2">
-          <button data-action="refresh" data-id="${a.id}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-sync-alt mr-1"></i> Refresh</button>
-          <button data-action="remove" data-id="${a.id}" class="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-trash mr-1"></i> Remove</button>
+          <button data-action="refresh" data-id="${a.id}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-sync-alt mr-1"></i></button>
+          <button data-action="remove" data-id="${a.id}" class="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-trash mr-1"></i></button>
         </div>
         <div class="text-xs text-gray-500">
           <span>Updated: ${updated}</span>
