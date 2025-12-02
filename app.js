@@ -108,10 +108,6 @@ function accountCardHTML(a) {
           <h3 class="text-lg font-semibold text-gray-800 mt-1">${a.name}</h3>
           <div class="text-xs text-gray-500 mt-1">Vendor: ${vendor.toUpperCase()}${vendor === "grok" && a.teamId ? ` • Team: ${a.teamId}` : ""}</div>
         </div>
-        <div class="flex items-center space-x-2">
-          <button data-action="refresh" data-id="${a.id}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-sync-alt mr-1"></i> Refresh</button>
-          <button data-action="remove" data-id="${a.id}" class="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-trash mr-1"></i> Remove</button>
-        </div>
       </div>
 
       <div class="mt-4 grid grid-cols-1 gap-3">
@@ -127,8 +123,14 @@ function accountCardHTML(a) {
           </div>
         `}
       </div>
-      <div class="mt-3 flex justify-end text-xs text-gray-500">
-        <span>Updated: ${updated}</span>
+      <div class="mt-3 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <button data-action="refresh" data-id="${a.id}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-sync-alt mr-1"></i> Refresh</button>
+          <button data-action="remove" data-id="${a.id}" class="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-trash mr-1"></i> Remove</button>
+        </div>
+        <div class="text-xs text-gray-500">
+          <span>Updated: ${updated}</span>
+        </div>
       </div>
 
       ${err ? `<div class="mt-3 text-sm text-red-600"><i class=\"fas fa-exclamation-circle mr-1\"></i>${err}</div>` : ""}
