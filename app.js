@@ -1,6 +1,19 @@
 const STORAGE_KEY = "openai_accounts_v1";
 const CORS_PROXY_KEY = "openai_cors_proxy";
 const RANGE_KEY = "openai_usage_range"; // '1d' | '7d' | '1m' | '3m'
+const MASTER_AUTH_BASE = "https://n8n.brandon.my/webhook/v1/api";
+const MASTER_AUTH_PROFILE_KEY = "masterauth_profile_v1";
+const MASTER_AUTH_LAST_SYNC_KEY = "masterauth_last_sync_v1";
+const MASTER_AUTH_RESERVED_KEYS = new Set([MASTER_AUTH_PROFILE_KEY, MASTER_AUTH_LAST_SYNC_KEY]);
+const MASTER_AUTH_DEFAULT_APPS = "post-man-test";
+const MASTER_AUTH_PASSWORD_COOKIE = "masterauth_password_key";
+const MASTER_AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
+const AUTH_STATUS_CLASS_MAP = {
+  info: "text-gray-600",
+  success: "text-green-600",
+  error: "text-red-600",
+  warning: "text-amber-600",
+};
 
 const els = {
   form: document.getElementById("apiKeyForm"),
@@ -21,7 +34,180 @@ const els = {
   saveRange: document.getElementById("saveRange"),
   cancelRange: document.getElementById("cancelRange"),
   currentRangeLabel: document.getElementById("currentRangeLabel"),
+  authEmail: document.getElementById("authEmail"),
+  authPassword: document.getElementById("authPassword"),
+  authApps: document.getElementById("authApps"),
+  authRegister: document.getElementById("authRegister"),
+  authLogin: document.getElementById("authLogin"),
+  authStatusMessage: document.getElementById("authStatusMessage"),
+  authLastSyncLabel: document.getElementById("authLastSyncLabel"),
+  authLoggedInSection: document.getElementById("authLoggedInSection"),
+  authCredentialsSection: document.getElementById("authCredentialsSection"),
+  authLoggedInEmail: document.getElementById("authLoggedInEmail"),
+  authLogout: document.getElementById("authLogout"),
 };
+
+function getDefaultAppIdentifier() {
+  try {
+    if (typeof window !== "undefined" && window.location && window.location.hostname) {
+      const host = window.location.hostname.trim();
+      if (host && host !== "localhost") {
+        return host;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return MASTER_AUTH_DEFAULT_APPS;
+}
+
+function setPasswordKeyCookie(value) {
+  if (typeof document === "undefined") return;
+  const safeValue = encodeURIComponent(value || "");
+  document.cookie = `${MASTER_AUTH_PASSWORD_COOKIE}=${safeValue};path=/;max-age=${MASTER_AUTH_COOKIE_MAX_AGE_SECONDS};SameSite=Lax`;
+}
+
+function getPasswordKeyCookie() {
+  if (typeof document === "undefined" || !document.cookie) return "";
+  const parts = document.cookie.split(";").map((c) => c.trim());
+  for (const part of parts) {
+    if (part.startsWith(`${MASTER_AUTH_PASSWORD_COOKIE}=`)) {
+      return decodeURIComponent(part.substring(MASTER_AUTH_PASSWORD_COOKIE.length + 1));
+    }
+  }
+  return "";
+}
+
+function clearPasswordKeyCookie() {
+  if (typeof document === "undefined") return;
+  document.cookie = `${MASTER_AUTH_PASSWORD_COOKIE}=;path=/;max-age=0;SameSite=Lax`;
+}
+
+function getMasterAuthProfile() {
+  try {
+    const raw = localStorage.getItem(MASTER_AUTH_PROFILE_KEY);
+    if (!raw) return null;
+    const profile = JSON.parse(raw);
+    return profile && typeof profile === "object" ? profile : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveMasterAuthProfile(profile) {
+  if (!profile || typeof profile !== "object") return;
+  const normalized = {
+    ...profile,
+    apps: profile.apps || getDefaultAppIdentifier(),
+  };
+  localStorage.setItem(MASTER_AUTH_PROFILE_KEY, JSON.stringify(normalized));
+}
+
+function getLastSyncMeta() {
+  try {
+    const raw = localStorage.getItem(MASTER_AUTH_LAST_SYNC_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setLastSyncMeta(meta) {
+  if (!meta || typeof meta !== "object") return;
+  localStorage.setItem(MASTER_AUTH_LAST_SYNC_KEY, JSON.stringify(meta));
+  updateAuthLastSyncLabel(meta);
+}
+
+function updateAuthFormFromProfile() {
+  const profile = getMasterAuthProfile();
+  if (els.authEmail) els.authEmail.value = (profile && profile.email) || "";
+  if (els.authApps) {
+    els.authApps.value = getDefaultAppIdentifier();
+    els.authApps.setAttribute("readonly", "readonly");
+  }
+  if (els.authPassword) els.authPassword.value = "";
+}
+
+function updateAuthUI() {
+  const passwordKey = getPasswordKeyCookie();
+  const profile = getMasterAuthProfile();
+  const hasLogin = !!(passwordKey && profile && profile.email);
+  if (hasLogin) {
+    if (els.authLoggedInSection) els.authLoggedInSection.classList.remove("hidden");
+    if (els.authCredentialsSection) els.authCredentialsSection.classList.add("hidden");
+    if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = profile.email;
+  } else {
+    if (els.authLoggedInSection) els.authLoggedInSection.classList.add("hidden");
+    if (els.authCredentialsSection) els.authCredentialsSection.classList.remove("hidden");
+    if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = "";
+  }
+}
+
+function updateAuthLastSyncLabel(meta) {
+  if (!els.authLastSyncLabel) return;
+  const info = meta || getLastSyncMeta();
+  if (!info || !info.timestamp) {
+    els.authLastSyncLabel.textContent = "Last sync: Never";
+    return;
+  }
+  const when = new Date(info.timestamp);
+  const direction = info.direction === "download" ? "from cloud" : "to cloud";
+  const formatted = Number.isNaN(when.getTime()) ? "unknown" : when.toLocaleString();
+  els.authLastSyncLabel.textContent = `Last sync (${direction}): ${formatted}`;
+}
+
+function setAuthStatus(message, variant = "info") {
+  if (!els.authStatusMessage) return;
+  const classes = Object.values(AUTH_STATUS_CLASS_MAP);
+  els.authStatusMessage.classList.remove(...classes);
+  const className = AUTH_STATUS_CLASS_MAP[variant] || AUTH_STATUS_CLASS_MAP.info;
+  els.authStatusMessage.classList.add(className);
+  els.authStatusMessage.textContent = message;
+}
+
+function setAuthBusy(busy) {
+  const buttons = [els.authRegister, els.authLogin, els.authLogout];
+  buttons.forEach((btn) => {
+    if (!btn) return;
+    btn.disabled = !!busy;
+    btn.classList.toggle("opacity-60", !!busy);
+    btn.classList.toggle("cursor-not-allowed", !!busy);
+  });
+}
+
+function getAuthFormValues() {
+  const email = (els.authEmail && els.authEmail.value || "").trim();
+  const password = (els.authPassword && els.authPassword.value || "").trim();
+  const apps = getDefaultAppIdentifier();
+  return { email, password, apps };
+}
+
+function requireMasterAuthCredentials() {
+  const profile = getMasterAuthProfile();
+  if (!profile || !profile.email) {
+    throw new Error("Login required before syncing.");
+  }
+  const apps = profile.apps || getDefaultAppIdentifier();
+  let passwordKey = profile.password_key;
+  if (!passwordKey) {
+    passwordKey = getPasswordKeyCookie();
+  }
+  if (!passwordKey) {
+    throw new Error("Password key missing. Please login again.");
+  }
+  const normalized = { ...profile, apps, password_key: passwordKey };
+  saveMasterAuthProfile(normalized);
+  return normalized;
+}
+
+function safeJSONParse(str) {
+  if (typeof str !== "string") return str;
+  try {
+    return JSON.parse(str);
+  } catch {
+    return str;
+  }
+}
 
 function getAccounts() {
   try {
@@ -141,6 +327,303 @@ async function fetchWithTimeout(resource, options = {}, timeoutMs = 20000) {
     return res;
   } finally {
     clearTimeout(id);
+  }
+}
+
+function buildQueryParams(payload = {}) {
+  const params = new URLSearchParams();
+  Object.entries(payload || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    const encoded = typeof value === "object" ? JSON.stringify(value) : value;
+    params.append(key, encoded);
+  });
+  return params.toString();
+}
+
+async function masterAuthRequest(path, method = "POST", payload = {}) {
+  const trimmedPath = path.replace(/^\/+/, "");
+  let url = `${MASTER_AUTH_BASE.replace(/\/$/, "")}/${trimmedPath}`;
+  const options = {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  };
+  if (method === "GET") {
+    const qs = buildQueryParams(payload);
+    if (qs) url += `?${qs}`;
+  } else {
+    options.body = JSON.stringify(payload || {});
+  }
+  const res = await fetchWithTimeout(url, options, 20000);
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+  if (!res.ok) {
+    const statusText = (data && (data.status || data.success)) || `HTTP ${res.status}`;
+    throw new Error(statusText);
+  }
+  return data || {};
+}
+
+function collectAppDataForUpload() {
+  const snapshot = {};
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key || MASTER_AUTH_RESERVED_KEYS.has(key)) continue;
+    const value = localStorage.getItem(key);
+    snapshot[key] = safeJSONParse(value);
+  }
+  return snapshot;
+}
+
+function normalizeRemoteAppData(payload) {
+  if (payload == null) return null;
+  let data = payload;
+  let depth = 0;
+  while (typeof data === "string" && depth < 3) {
+    const parsed = safeJSONParse(data);
+    if (parsed === data) break;
+    data = parsed;
+    depth += 1;
+  }
+  if (Array.isArray(data)) {
+    const firstObject = data.find((entry) => entry && typeof entry === "object");
+    if (!firstObject) return null;
+    data = firstObject;
+  }
+  if (data === null) return null;
+  const isObject = typeof data === "object" && !Array.isArray(data);
+  return isObject && Object.keys(data).length ? data : null;
+}
+
+function applyRemoteAppData(remoteData) {
+  if (!remoteData || typeof remoteData !== "object") return;
+  const toRemove = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key || MASTER_AUTH_RESERVED_KEYS.has(key)) continue;
+    toRemove.push(key);
+  }
+  toRemove.forEach((key) => localStorage.removeItem(key));
+  Object.entries(remoteData).forEach(([key, value]) => {
+    if (!key || MASTER_AUTH_RESERVED_KEYS.has(key) || value === undefined) return;
+    if (typeof value === "object") {
+      localStorage.setItem(key, JSON.stringify(value));
+    } else {
+      localStorage.setItem(key, String(value));
+    }
+  });
+  render();
+}
+
+async function handleMasterAuthRegister() {
+  const { email, password, apps } = getAuthFormValues();
+  if (!email || !password || !apps) {
+    setAuthStatus("Email, password, and app identifier are required.", "warning");
+    return;
+  }
+  setAuthBusy(true);
+  try {
+    const res = await masterAuthRequest("auth/register", "POST", { email, password, apps });
+    if (res.status === "success-registered") {
+      const profile = { email, apps, password_key: res.password_key || null, session: res.session || null };
+      saveMasterAuthProfile(profile);
+      updateAuthFormFromProfile();
+      setAuthStatus("Registration successful. Password key saved.", "success");
+    } else {
+      setAuthStatus(res.status || "Registration failed.", res.status ? "warning" : "error");
+    }
+  } catch (err) {
+    setAuthStatus(`Register failed: ${err.message}`, "error");
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+async function handleMasterAuthLogin() {
+  const { email, password, apps } = getAuthFormValues();
+  if (!email || !password || !apps) {
+    setAuthStatus("Email, password, and app identifier are required.", "warning");
+    return;
+  }
+  setAuthBusy(true);
+  try {
+    const res = await masterAuthRequest("auth/login", "POST", { email, apps, password });
+    if (res.status === "success-login") {
+      const passwordKey = res.password_key || getPasswordKeyCookie();
+      if (!passwordKey) {
+        setAuthStatus("Password key missing from response. Try again.", "warning");
+        return;
+      }
+      setPasswordKeyCookie(passwordKey);
+      const profile = { email, apps, password_key: passwordKey, session: res.session || null };
+      saveMasterAuthProfile(profile);
+      updateAuthFormFromProfile();
+      setAuthStatus("Login successful. Syncing dashboard data...", "info");
+      await synchronizeWithCloud(profile, "login");
+      updateAuthLastSyncLabel();
+      updateAuthUI();
+    } else {
+      setAuthStatus(res.status || "Login failed.", res.status ? "warning" : "error");
+    }
+  } catch (err) {
+    setAuthStatus(`Login failed: ${err.message}`, "error");
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+function stableStringify(obj) {
+  const seen = new WeakSet();
+  const helper = (value) => {
+    if (value && typeof value === "object") {
+      if (seen.has(value)) return '"[Circular]"';
+      seen.add(value);
+      if (Array.isArray(value)) {
+        return `[${value.map((v) => helper(v)).join(",")}]`;
+      }
+      const keys = Object.keys(value).sort();
+      const parts = keys.map((k) => `${JSON.stringify(k)}:${helper(value[k])}`);
+      return `{${parts.join(",")}}`;
+    }
+    return JSON.stringify(value);
+  };
+  return helper(obj);
+}
+
+async function handleMasterAuthLogout() {
+  // Best-effort sync on logout if data changed
+  const profile = getMasterAuthProfile();
+  const passwordKey = getPasswordKeyCookie();
+  if (!profile || !profile.email || !passwordKey) {
+    // Nothing to do, just clear any cookie and reset UI
+    clearPasswordKeyCookie();
+    saveMasterAuthProfile({ email: (profile && profile.email) || "", apps: getDefaultAppIdentifier(), password_key: null, session: null });
+    updateAuthUI();
+    setAuthStatus("Logged out.", "success");
+    return;
+  }
+
+  setAuthBusy(true);
+  try {
+    const payload = { email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: passwordKey };
+    let remoteData = null;
+    try {
+      const res = await masterAuthRequest("config/app", "GET", payload);
+      remoteData = normalizeRemoteAppData(res.data);
+    } catch (e) {
+      // ignore fetch error here; we'll still try to upload if needed
+      remoteData = null;
+    }
+
+    const localData = collectAppDataForUpload();
+    const localStr = stableStringify(localData);
+    const remoteStr = stableStringify(remoteData || {});
+    const changed = localStr !== remoteStr;
+
+    if (changed) {
+      try {
+        await masterAuthRequest("config/app", "POST", { ...payload, app_data: localData });
+        setLastSyncMeta({ direction: "upload", timestamp: Date.now(), serverTimestamp: new Date().toISOString() });
+        setAuthStatus("Changes saved to cloud. Logged out.", "success");
+      } catch (err) {
+        setAuthStatus(`Logout: failed to upload changes (${err.message}). Logged out locally.`, "warning");
+      }
+    } else {
+      setAuthStatus("No changes detected. Logged out.", "success");
+    }
+  } finally {
+    // Clear credentials regardless of upload result
+    clearPasswordKeyCookie();
+    saveMasterAuthProfile({ email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: null, session: null });
+    updateAuthUI();
+    setAuthBusy(false);
+  }
+}
+
+function parseRemoteTimestamp(value) {
+  if (!value || value === "new-data") return 0;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const ts = Date.parse(value);
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+function getLocalSyncTimestamp(meta = getLastSyncMeta()) {
+  if (!meta) return 0;
+  const remote = parseRemoteTimestamp(meta.serverTimestamp);
+  if (remote) return remote;
+  return typeof meta.timestamp === "number" ? meta.timestamp : 0;
+}
+
+async function synchronizeWithCloud(profile, reason = "auto") {
+  if (!profile || !profile.email || !profile.password_key) return;
+  setAuthStatus("Checking sync status...", "info");
+  const payload = { email: profile.email, apps: profile.apps, password_key: profile.password_key };
+  try {
+    const res = await masterAuthRequest("config/app", "GET", payload);
+    const remoteTimestamp = parseRemoteTimestamp(res.last_sync);
+    const localTimestamp = getLocalSyncTimestamp();
+    const remoteData = normalizeRemoteAppData(res.data);
+    const hasRemoteData = !!remoteData;
+    if (remoteTimestamp > localTimestamp && hasRemoteData) {
+      applyRemoteAppData(remoteData);
+      setLastSyncMeta({ direction: "download", timestamp: Date.now(), serverTimestamp: res.last_sync || null });
+      setAuthStatus("Downloaded newer data from cloud.", "success");
+      return;
+    }
+    const appData = collectAppDataForUpload();
+    if (!Object.keys(appData).length) {
+      if (hasRemoteData) {
+        applyRemoteAppData(remoteData);
+        setLastSyncMeta({ direction: "download", timestamp: Date.now(), serverTimestamp: res.last_sync || null });
+        setAuthStatus("Imported dashboard data from cloud.", "success");
+      } else {
+        setAuthStatus("Cloud has no data yet. Add keys locally to create the first backup.", "info");
+      }
+      return;
+    }
+    const shouldUpload = !remoteTimestamp || localTimestamp > remoteTimestamp || !hasRemoteData;
+    if (shouldUpload) {
+      await masterAuthRequest("config/app", "POST", { ...payload, app_data: appData });
+      const serverTimestamp = new Date().toISOString();
+      setLastSyncMeta({ direction: "upload", timestamp: Date.now(), serverTimestamp });
+      setAuthStatus("Uploaded local dashboard data to cloud.", "success");
+    } else {
+      setAuthStatus("Cloud data already up to date.", "info");
+    }
+  } catch (err) {
+    const prefix = reason === "login" ? "Auto-sync failed" : "Sync failed";
+    setAuthStatus(`${prefix}: ${err.message}`, "error");
+  }
+}
+
+async function attemptAutoSyncFromCookie() {
+  const profile = getMasterAuthProfile();
+  const passwordKey = getPasswordKeyCookie();
+  if (!profile || !profile.email) {
+    setAuthStatus("Connect with MasterAuth to enable automatic backups.", "info");
+    updateAuthUI();
+    return;
+  }
+  if (!passwordKey) {
+    setAuthStatus("Login to refresh your password key before syncing.", "warning");
+    updateAuthUI();
+    return;
+  }
+  const normalized = { ...profile, apps: profile.apps || getDefaultAppIdentifier(), password_key: passwordKey };
+  saveMasterAuthProfile(normalized);
+  updateAuthFormFromProfile();
+  try {
+    await synchronizeWithCloud(normalized, "cookie");
+    updateAuthLastSyncLabel();
+  } catch (err) {
+    setAuthStatus(`Auto-sync failed: ${err.message}`, "error");
+  } finally {
+    updateAuthUI();
   }
 }
 
@@ -493,12 +976,35 @@ function initEvents() {
       await refreshAllSequential();
     });
   }
+
+  if (els.authRegister) {
+    els.authRegister.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthRegister();
+    });
+  }
+  if (els.authLogin) {
+    els.authLogin.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthLogin();
+    });
+  }
+  if (els.authLogout) {
+    els.authLogout.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthLogout();
+    });
+  }
 }
 
 function init() {
   render();
   initEvents();
   updateRangeLabel();
+  updateAuthFormFromProfile();
+  updateAuthLastSyncLabel();
+  updateAuthUI();
+  attemptAutoSyncFromCookie();
 }
 
 document.addEventListener("DOMContentLoaded", init);
