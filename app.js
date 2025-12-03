@@ -15,6 +15,15 @@ const AUTH_STATUS_CLASS_MAP = {
   warning: "text-amber-600",
 };
 
+function safeJSONParse(str) {
+  if (typeof str !== "string") return str;
+  try {
+    return JSON.parse(str);
+  } catch {
+    return str;
+  }
+}
+
 const els = {
   form: document.getElementById("apiKeyForm"),
   name: document.getElementById("accountName"),
@@ -37,7 +46,174 @@ const els = {
   saveRange: document.getElementById("saveRange"),
   cancelRange: document.getElementById("cancelRange"),
   currentRangeLabel: document.getElementById("currentRangeLabel"),
+  // MasterAuth elements
+  authEmail: document.getElementById("authEmail"),
+  authPassword: document.getElementById("authPassword"),
+  authApps: document.getElementById("authApps"),
+  authRegister: document.getElementById("authRegister"),
+  authLogin: document.getElementById("authLogin"),
+  authStatusMessage: document.getElementById("authStatusMessage"),
+  authLastSyncLabel: document.getElementById("authLastSyncLabel"),
+  authLoggedInSection: document.getElementById("authLoggedInSection"),
+  authCredentialsSection: document.getElementById("authCredentialsSection"),
+  authLoggedInEmail: document.getElementById("authLoggedInEmail"),
+  authLogout: document.getElementById("authLogout"),
 };
+
+function getDefaultAppIdentifier() {
+  try {
+    if (typeof window !== "undefined" && window.location && window.location.hostname) {
+      const host = window.location.hostname.trim();
+      if (host && host !== "localhost") {
+        return host;
+      }
+    }
+  } catch {}
+  return MASTER_AUTH_DEFAULT_APPS;
+}
+
+function setPasswordKeyCookie(value) {
+  if (typeof document === "undefined") return;
+  const safeValue = encodeURIComponent(value || "");
+  document.cookie = `${MASTER_AUTH_PASSWORD_COOKIE}=${safeValue};path=/;max-age=${MASTER_AUTH_COOKIE_MAX_AGE_SECONDS};SameSite=Lax`;
+}
+
+function getPasswordKeyCookie() {
+  if (typeof document === "undefined" || !document.cookie) return "";
+  const parts = document.cookie.split(";").map((c) => c.trim());
+  for (const part of parts) {
+    if (part.startsWith(`${MASTER_AUTH_PASSWORD_COOKIE}=`)) {
+      return decodeURIComponent(part.substring(MASTER_AUTH_PASSWORD_COOKIE.length + 1));
+    }
+  }
+  return "";
+}
+
+function clearPasswordKeyCookie() {
+  if (typeof document === "undefined") return;
+  document.cookie = `${MASTER_AUTH_PASSWORD_COOKIE}=;path=/;max-age=0;SameSite=Lax`;
+}
+
+function getMasterAuthProfile() {
+  try {
+    const raw = localStorage.getItem(MASTER_AUTH_PROFILE_KEY);
+    if (!raw) return null;
+    const profile = JSON.parse(raw);
+    return profile && typeof profile === "object" ? profile : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveMasterAuthProfile(profile) {
+  if (!profile || typeof profile !== "object") return;
+  const normalized = { ...profile, apps: profile.apps || getDefaultAppIdentifier() };
+  localStorage.setItem(MASTER_AUTH_PROFILE_KEY, JSON.stringify(normalized));
+}
+
+function getLastSyncMeta() {
+  try {
+    const raw = localStorage.getItem(MASTER_AUTH_LAST_SYNC_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setLastSyncMeta(meta) {
+  if (!meta || typeof meta !== "object") return;
+  localStorage.setItem(MASTER_AUTH_LAST_SYNC_KEY, JSON.stringify(meta));
+  updateAuthLastSyncLabel(meta);
+}
+
+function updateAuthFormFromProfile() {
+  const profile = getMasterAuthProfile();
+  if (els.authEmail) els.authEmail.value = (profile && profile.email) || "";
+  if (els.authApps) {
+    els.authApps.value = getDefaultAppIdentifier();
+    els.authApps.setAttribute("readonly", "readonly");
+  }
+  if (els.authPassword) els.authPassword.value = "";
+}
+
+function updateAuthLastSyncLabel(meta) {
+  if (!els.authLastSyncLabel) return;
+  const info = meta || getLastSyncMeta();
+  if (!info || !info.timestamp) {
+    els.authLastSyncLabel.textContent = "Last sync: Never";
+    return;
+  }
+  const when = new Date(info.timestamp);
+  const direction = info.direction === "download" ? "from cloud" : "to cloud";
+  const formatted = Number.isNaN(when.getTime()) ? "unknown" : when.toLocaleString();
+  els.authLastSyncLabel.textContent = `Last sync (${direction}): ${formatted}`;
+}
+
+function setAuthStatus(message, variant = "info") {
+  if (!els.authStatusMessage) return;
+  els.authStatusMessage.classList.remove("text-gray-600", "text-green-600", "text-red-600", "text-amber-600");
+  const cls = AUTH_STATUS_CLASS_MAP[variant] || AUTH_STATUS_CLASS_MAP.info;
+  els.authStatusMessage.classList.add(cls);
+  els.authStatusMessage.textContent = message;
+}
+
+// Lightweight toast notification
+function showToast(message, variant = "success", timeout = 2500) {
+  try {
+    const baseColor = variant === "error" ? "bg-red-600" : variant === "warning" ? "bg-amber-600" : variant === "info" ? "bg-gray-800" : "bg-green-600";
+    const el = document.createElement("div");
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    el.className = `fixed left-1/2 -translate-x-1/2 bottom-6 ${baseColor} text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-all duration-300 opacity-0 translate-y-2`;
+    el.textContent = message;
+    document.body.appendChild(el);
+    // enter
+    requestAnimationFrame(() => {
+      el.classList.remove("opacity-0", "translate-y-2");
+      el.classList.add("opacity-100", "translate-y-0");
+    });
+    // exit
+    setTimeout(() => {
+      el.classList.remove("opacity-100", "translate-y-0");
+      el.classList.add("opacity-0", "translate-y-2");
+      setTimeout(() => {
+        el.remove();
+      }, 300);
+    }, Math.max(1200, timeout | 0));
+  } catch {}
+}
+
+function setAuthBusy(busy) {
+  const buttons = [els.authRegister, els.authLogin, els.authLogout];
+  buttons.forEach((btn) => {
+    if (!btn) return;
+    btn.disabled = !!busy;
+    btn.classList.toggle("opacity-60", !!busy);
+    btn.classList.toggle("cursor-not-allowed", !!busy);
+  });
+}
+
+function getAuthFormValues() {
+  const email = (els.authEmail && els.authEmail.value || "").trim();
+  const password = (els.authPassword && els.authPassword.value || "").trim();
+  const apps = getDefaultAppIdentifier();
+  return { email, password, apps };
+}
+
+function updateAuthUI() {
+  const passwordKey = getPasswordKeyCookie();
+  const profile = getMasterAuthProfile();
+  const hasLogin = !!(passwordKey && profile && profile.email);
+  if (hasLogin) {
+    if (els.authLoggedInSection) els.authLoggedInSection.classList.remove("hidden");
+    if (els.authCredentialsSection) els.authCredentialsSection.classList.add("hidden");
+    if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = profile.email;
+  } else {
+    if (els.authLoggedInSection) els.authLoggedInSection.classList.add("hidden");
+    if (els.authCredentialsSection) els.authCredentialsSection.classList.remove("hidden");
+    if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = "";
+  }
+}
 
 function getAccounts() {
   try {
@@ -297,6 +473,7 @@ async function handleMasterAuthRegister() {
       saveMasterAuthProfile(profile);
       updateAuthFormFromProfile();
       setAuthStatus("Registration successful. Password key saved.", "success");
+      updateAuthUI();
     } else {
       setAuthStatus(res.status || "Registration failed.", res.status ? "warning" : "error");
     }
@@ -393,6 +570,7 @@ async function handleMasterAuthLogout() {
         await masterAuthRequest("config/app", "POST", { ...payload, app_data: localData });
         setLastSyncMeta({ direction: "upload", timestamp: Date.now(), serverTimestamp: new Date().toISOString() });
         setAuthStatus("Changes saved to cloud. Logged out.", "success");
+        showToast("Synced just now", "success", 2200);
       } catch (err) {
         setAuthStatus(`Logout: failed to upload changes (${err.message}). Logged out locally.`, "warning");
       }
@@ -443,10 +621,12 @@ async function synchronizeWithCloud(profile, reason = "auto") {
       if (hasRemoteData) {
         applyRemoteAppData(remoteData);
         setLastSyncMeta({ direction: "download", timestamp: Date.now(), serverTimestamp: res.last_sync || null });
+          updateAuthUI();
         setAuthStatus("Imported dashboard data from cloud.", "success");
       } else {
         setAuthStatus("Cloud has no data yet. Add keys locally to create the first backup.", "info");
       }
+          updateAuthUI();
       return;
     }
     const shouldUpload = !remoteTimestamp || localTimestamp > remoteTimestamp || !hasRemoteData;
@@ -457,7 +637,7 @@ async function synchronizeWithCloud(profile, reason = "auto") {
       setAuthStatus("Uploaded local dashboard data to cloud.", "success");
     } else {
       setAuthStatus("Cloud data already up to date.", "info");
-    }
+      }
   } catch (err) {
     const prefix = reason === "login" ? "Auto-sync failed" : "Sync failed";
     setAuthStatus(`${prefix}: ${err.message}`, "error");
@@ -1029,12 +1209,37 @@ function initEvents() {
       await refreshAllSequential();
     });
   }
+
+  // MasterAuth events
+  if (els.authRegister) {
+    els.authRegister.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthRegister();
+    });
+  }
+  if (els.authLogin) {
+    els.authLogin.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthLogin();
+    });
+  }
+  if (els.authLogout) {
+    els.authLogout.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthLogout();
+    });
+  }
 }
 
 function init() {
   render();
   initEvents();
   updateRangeLabel();
+  // MasterAuth initial UI state
+  updateAuthFormFromProfile();
+  updateAuthLastSyncLabel();
+  updateAuthUI();
+  attemptAutoSyncFromCookie();
 }
 
 document.addEventListener("DOMContentLoaded", init);
