@@ -18,7 +18,10 @@ const AUTH_STATUS_CLASS_MAP = {
 const els = {
   form: document.getElementById("apiKeyForm"),
   name: document.getElementById("accountName"),
+  vendor: document.getElementById("vendorSelect"),
   adminKey: document.getElementById("adminKey"),
+  teamId: document.getElementById("teamId"),
+  teamIdRow: document.getElementById("teamIdRow"),
   addKeyModal: document.getElementById("addKeyModal"),
   openAddKeyModal: document.getElementById("openAddKeyModal"),
   closeAddKeyModal: document.getElementById("closeAddKeyModal"),
@@ -34,180 +37,7 @@ const els = {
   saveRange: document.getElementById("saveRange"),
   cancelRange: document.getElementById("cancelRange"),
   currentRangeLabel: document.getElementById("currentRangeLabel"),
-  authEmail: document.getElementById("authEmail"),
-  authPassword: document.getElementById("authPassword"),
-  authApps: document.getElementById("authApps"),
-  authRegister: document.getElementById("authRegister"),
-  authLogin: document.getElementById("authLogin"),
-  authStatusMessage: document.getElementById("authStatusMessage"),
-  authLastSyncLabel: document.getElementById("authLastSyncLabel"),
-  authLoggedInSection: document.getElementById("authLoggedInSection"),
-  authCredentialsSection: document.getElementById("authCredentialsSection"),
-  authLoggedInEmail: document.getElementById("authLoggedInEmail"),
-  authLogout: document.getElementById("authLogout"),
 };
-
-function getDefaultAppIdentifier() {
-  try {
-    if (typeof window !== "undefined" && window.location && window.location.hostname) {
-      const host = window.location.hostname.trim();
-      if (host && host !== "localhost") {
-        return host;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return MASTER_AUTH_DEFAULT_APPS;
-}
-
-function setPasswordKeyCookie(value) {
-  if (typeof document === "undefined") return;
-  const safeValue = encodeURIComponent(value || "");
-  document.cookie = `${MASTER_AUTH_PASSWORD_COOKIE}=${safeValue};path=/;max-age=${MASTER_AUTH_COOKIE_MAX_AGE_SECONDS};SameSite=Lax`;
-}
-
-function getPasswordKeyCookie() {
-  if (typeof document === "undefined" || !document.cookie) return "";
-  const parts = document.cookie.split(";").map((c) => c.trim());
-  for (const part of parts) {
-    if (part.startsWith(`${MASTER_AUTH_PASSWORD_COOKIE}=`)) {
-      return decodeURIComponent(part.substring(MASTER_AUTH_PASSWORD_COOKIE.length + 1));
-    }
-  }
-  return "";
-}
-
-function clearPasswordKeyCookie() {
-  if (typeof document === "undefined") return;
-  document.cookie = `${MASTER_AUTH_PASSWORD_COOKIE}=;path=/;max-age=0;SameSite=Lax`;
-}
-
-function getMasterAuthProfile() {
-  try {
-    const raw = localStorage.getItem(MASTER_AUTH_PROFILE_KEY);
-    if (!raw) return null;
-    const profile = JSON.parse(raw);
-    return profile && typeof profile === "object" ? profile : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveMasterAuthProfile(profile) {
-  if (!profile || typeof profile !== "object") return;
-  const normalized = {
-    ...profile,
-    apps: profile.apps || getDefaultAppIdentifier(),
-  };
-  localStorage.setItem(MASTER_AUTH_PROFILE_KEY, JSON.stringify(normalized));
-}
-
-function getLastSyncMeta() {
-  try {
-    const raw = localStorage.getItem(MASTER_AUTH_LAST_SYNC_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function setLastSyncMeta(meta) {
-  if (!meta || typeof meta !== "object") return;
-  localStorage.setItem(MASTER_AUTH_LAST_SYNC_KEY, JSON.stringify(meta));
-  updateAuthLastSyncLabel(meta);
-}
-
-function updateAuthFormFromProfile() {
-  const profile = getMasterAuthProfile();
-  if (els.authEmail) els.authEmail.value = (profile && profile.email) || "";
-  if (els.authApps) {
-    els.authApps.value = getDefaultAppIdentifier();
-    els.authApps.setAttribute("readonly", "readonly");
-  }
-  if (els.authPassword) els.authPassword.value = "";
-}
-
-function updateAuthUI() {
-  const passwordKey = getPasswordKeyCookie();
-  const profile = getMasterAuthProfile();
-  const hasLogin = !!(passwordKey && profile && profile.email);
-  if (hasLogin) {
-    if (els.authLoggedInSection) els.authLoggedInSection.classList.remove("hidden");
-    if (els.authCredentialsSection) els.authCredentialsSection.classList.add("hidden");
-    if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = profile.email;
-  } else {
-    if (els.authLoggedInSection) els.authLoggedInSection.classList.add("hidden");
-    if (els.authCredentialsSection) els.authCredentialsSection.classList.remove("hidden");
-    if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = "";
-  }
-}
-
-function updateAuthLastSyncLabel(meta) {
-  if (!els.authLastSyncLabel) return;
-  const info = meta || getLastSyncMeta();
-  if (!info || !info.timestamp) {
-    els.authLastSyncLabel.textContent = "Last sync: Never";
-    return;
-  }
-  const when = new Date(info.timestamp);
-  const direction = info.direction === "download" ? "from cloud" : "to cloud";
-  const formatted = Number.isNaN(when.getTime()) ? "unknown" : when.toLocaleString();
-  els.authLastSyncLabel.textContent = `Last sync (${direction}): ${formatted}`;
-}
-
-function setAuthStatus(message, variant = "info") {
-  if (!els.authStatusMessage) return;
-  const classes = Object.values(AUTH_STATUS_CLASS_MAP);
-  els.authStatusMessage.classList.remove(...classes);
-  const className = AUTH_STATUS_CLASS_MAP[variant] || AUTH_STATUS_CLASS_MAP.info;
-  els.authStatusMessage.classList.add(className);
-  els.authStatusMessage.textContent = message;
-}
-
-function setAuthBusy(busy) {
-  const buttons = [els.authRegister, els.authLogin, els.authLogout];
-  buttons.forEach((btn) => {
-    if (!btn) return;
-    btn.disabled = !!busy;
-    btn.classList.toggle("opacity-60", !!busy);
-    btn.classList.toggle("cursor-not-allowed", !!busy);
-  });
-}
-
-function getAuthFormValues() {
-  const email = (els.authEmail && els.authEmail.value || "").trim();
-  const password = (els.authPassword && els.authPassword.value || "").trim();
-  const apps = getDefaultAppIdentifier();
-  return { email, password, apps };
-}
-
-function requireMasterAuthCredentials() {
-  const profile = getMasterAuthProfile();
-  if (!profile || !profile.email) {
-    throw new Error("Login required before syncing.");
-  }
-  const apps = profile.apps || getDefaultAppIdentifier();
-  let passwordKey = profile.password_key;
-  if (!passwordKey) {
-    passwordKey = getPasswordKeyCookie();
-  }
-  if (!passwordKey) {
-    throw new Error("Password key missing. Please login again.");
-  }
-  const normalized = { ...profile, apps, password_key: passwordKey };
-  saveMasterAuthProfile(normalized);
-  return normalized;
-}
-
-function safeJSONParse(str) {
-  if (typeof str !== "string") return str;
-  try {
-    return JSON.parse(str);
-  } catch {
-    return str;
-  }
-}
 
 function getAccounts() {
   try {
@@ -225,10 +55,12 @@ function saveAccounts(list) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
 
-function addAccount(name, adminKey) {
+function addAccount(name, adminKey, vendor = "openai", extra = {}) {
   const list = getAccounts();
   const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
-  list.push({ id, name, adminKey: adminKey || "", lastUpdated: null, balance: null, error: null });
+  const account = { id, name, vendor: vendor || "openai", adminKey: adminKey || "", lastUpdated: null, balance: null, error: null };
+  if (vendor === "grok" && extra && extra.teamId) account.teamId = extra.teamId;
+  list.push(account);
   saveAccounts(list);
   return id;
 }
@@ -266,34 +98,65 @@ function showLoading(show) {
 }
 
 function accountCardHTML(a) {
+  const vendor = a.vendor || "openai";
   const hasBalance = !!(a && a.balance);
   const hasUsed = hasBalance && typeof a.balance.used === "number";
   const used = hasUsed ? a.balance.used : null;
+  const availableNum = hasBalance ? Number(a.balance.available) : NaN;
+  const hasAvailable = Number.isFinite(availableNum);
+  const available = hasAvailable ? availableNum : null;
   const updated = a.lastUpdated ? new Date(a.lastUpdated).toLocaleString() : "Never";
   const err = a.error ? String(a.error) : "";
 
   const secretForLabel = a.adminKey || "";
+  const vendorName = vendor === "openai" ? "OpenAI" : vendor === "deepseek" ? "Deepseek" : vendor === "grok" ? "Grok" : (vendor || "").toUpperCase();
+  const vendorBadgeClass = vendor === "openai"
+    ? "bg-purple-100 text-purple-800"
+    : vendor === "deepseek"
+    ? "bg-teal-100 text-teal-800"
+    : vendor === "grok"
+    ? "bg-amber-100 text-amber-800"
+    : "bg-gray-100 text-gray-800";
+  const teamBadge = vendor === "grok" && a.teamId
+    ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">Team: ${a.teamId}</span>`
+    : "";
+  const extraInfo = vendor === "grok" && a.teamId
+    ? `Team: ${a.teamId}`
+    : ""; // Future: show Org ID if stored for OpenAI
   return `
     <div class="balance-card border border-gray-200 rounded-xl p-5 fade-in">
       <div class="flex items-start justify-between">
-        <div>
-          <div class="text-sm text-gray-500">${maskKey(secretForLabel)}</div>
-          <h3 class="text-lg font-semibold text-gray-800 mt-1">${a.name}</h3>
-        </div>
-        <div class="flex items-center space-x-2">
-          <button data-action="refresh" data-id="${a.id}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-sync-alt mr-1"></i> Refresh</button>
-          <button data-action="remove" data-id="${a.id}" class="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-trash mr-1"></i> Remove</button>
+        <div class="w-full">
+          <div class="flex items-center flex-wrap gap-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${vendorBadgeClass}">${vendorName}</span>
+            <div class="text-sm text-gray-500">${maskKey(secretForLabel)}</div>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-800 mt-2">${a.name}</h3>
+          ${extraInfo ? `<div class="text-xs text-gray-500 mt-1">${extraInfo}</div>` : ""}
         </div>
       </div>
 
       <div class="mt-4 grid grid-cols-1 gap-3">
-        <div class="bg-gray-50 rounded-lg p-4 text-center">
-          <div class="text-xs text-gray-500">Used (range)</div>
-          <div class="text-xl font-semibold text-gray-800">${hasUsed ? formatUSD(used) : "—"}</div>
-        </div>
+        ${vendor === "openai" ? `
+          <div class="bg-gray-50 rounded-lg p-4 text-center">
+            <div class="text-xs text-gray-500">Used (range)</div>
+            <div class="text-xl font-semibold text-gray-800">${hasUsed ? formatUSD(used) : "—"}</div>
+          </div>
+        ` : `
+          <div class="bg-gray-50 rounded-lg p-4 text-center">
+            <div class="text-xs text-gray-500">Available</div>
+            <div class="text-xl font-semibold text-gray-800">${hasAvailable ? formatUSD(available) : "—"}</div>
+          </div>
+        `}
       </div>
-      <div class="mt-3 flex justify-end text-xs text-gray-500">
-        <span>Updated: ${updated}</span>
+      <div class="mt-3 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <button data-action="refresh" data-id="${a.id}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-sync-alt mr-1"></i></button>
+          <button data-action="remove" data-id="${a.id}" class="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-2 rounded-lg"><i class="fas fa-trash mr-1"></i></button>
+        </div>
+        <div class="text-xs text-gray-500">
+          <span>Updated: ${updated}</span>
+        </div>
       </div>
 
       ${err ? `<div class="mt-3 text-sm text-red-600"><i class=\"fas fa-exclamation-circle mr-1\"></i>${err}</div>` : ""}
@@ -633,6 +496,23 @@ function getProxyBase() {
   return v.replace(/\/$/, "");
 }
 
+// Build a URL that optionally routes via a CORS proxy.
+// Supported proxy base formats:
+//  - Base containing "{url}" placeholder: e.g. https://your-proxy.example.com?url={url}
+//  - Plain base: appends "?/proxy?url=" by default: https://your-proxy.example.com/proxy?url=<encoded target>
+//  - If no proxy configured, returns the direct host+path
+function buildProxiedUrl(host, path) {
+  const base = getProxyBase();
+  const full = host.replace(/\/$/, "") + path;
+  if (!base) return full;
+
+  if (base.includes("{url}")) {
+    return base.replace("{url}", encodeURIComponent(full));
+  }
+  // Default convention: base + "/proxy?url=" + encoded full URL
+  return base + (base.endsWith("/") ? "" : "/") + "proxy?url=" + encodeURIComponent(full);
+}
+
 function toISODate(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -702,15 +582,17 @@ function toUnixStartOfNextDay(dateStr) {
 async function fetchOrgCostsDay(adminKey, dateStr) {
   const start = toUnixStartOfDay(dateStr);
   const endExclusive = toUnixStartOfNextDay(dateStr);
-  const base = getProxyBase();
-  const url = (base ? `${base}` : "https://api.openai.com") + `/v1/organization/costs?start_time=${encodeURIComponent(start)}&end_time=${encodeURIComponent(endExclusive)}`;
+  const url = buildProxiedUrl(
+    "https://api.openai.com",
+    `/v1/organization/costs?start_time=${encodeURIComponent(start)}&end_time=${encodeURIComponent(endExclusive)}`
+  );
   const res = await fetchWithTimeout(url, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${adminKey}`,
       "Content-Type": "application/json",
     },
-    mode: base ? "cors" : "cors",
+    mode: "cors",
   }, 20000);
 
   if (!res.ok) {
@@ -731,9 +613,8 @@ async function fetchOrgCostsRange(adminKey, startStr, endStr) {
   const start = toUnixStartOfDay(startStr);
   // end_time is exclusive; use start of the day after endStr
   const endExclusive = toUnixStartOfNextDay(endStr);
-  const base = getProxyBase();
-  const baseApi = base ? `${base}` : "https://api.openai.com";
-  let url = `${baseApi}/v1/organization/costs?start_time=${encodeURIComponent(start)}&end_time=${encodeURIComponent(endExclusive)}`;
+  const baseApi = "https://api.openai.com";
+  let url = buildProxiedUrl(baseApi, `/v1/organization/costs?start_time=${encodeURIComponent(start)}&end_time=${encodeURIComponent(endExclusive)}`);
 
   let total = 0;
   let pageCount = 0;
@@ -748,7 +629,7 @@ async function fetchOrgCostsRange(adminKey, startStr, endStr) {
           Authorization: `Bearer ${adminKey}`,
           "Content-Type": "application/json",
         },
-        mode: base ? "cors" : "cors",
+        mode: "cors",
       },
       20000
     );
@@ -781,11 +662,17 @@ async function fetchOrgCostsRange(adminKey, startStr, endStr) {
       const next = data.next_page;
       if (typeof next === "string") {
         if (/^https?:\/\//i.test(next)) {
-          url = next;
+          // When server returns absolute URL, re-wrap it via proxy if needed
+          try {
+            const u = new URL(next);
+            url = buildProxiedUrl(u.origin, u.pathname + (u.search || ""));
+          } catch {
+            url = buildProxiedUrl(baseApi, `/v1/organization/costs${next.startsWith("?") ? next : `?${next}`}`);
+          }
         } else if (next.startsWith("/")) {
-          url = baseApi.replace(/\/$/, "") + next;
+          url = buildProxiedUrl(baseApi, next);
         } else {
-          url = `${baseApi}/v1/organization/costs${next.startsWith("?") ? next : `?${next}`}`;
+          url = buildProxiedUrl(baseApi, `/v1/organization/costs${next.startsWith("?") ? next : `?${next}`}`);
         }
       } else {
         url = "";
@@ -849,6 +736,140 @@ async function fetchUsageRangeWithAdminKey(adminKey, range = getRangeSetting()) 
   }
 }
 
+// Deepseek: simple balance endpoint. Returns available credit/balance.
+async function fetchDeepseekBalance(token) {
+  const host = "https://api.deepseek.com";
+  const url = buildProxiedUrl(host, "/user/balance");
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      mode: "cors",
+    },
+    20000
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    try { console.error("[Deepseek] balance error", { status: res.status, body: text }); } catch {}
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  try { console.log("[Deepseek] /user/balance payload", data); } catch {}
+  // Prefer USD entry if payload is an array of currency balances
+  let available = null;
+  let currency = null;
+  const toNumberMaybe = (x) => {
+    if (typeof x === "number") return x;
+    if (typeof x === "string") {
+      const n = Number(x.replace(/[,_\s]/g, ""));
+      return Number.isNaN(n) ? null : n;
+    }
+    return null;
+  };
+
+  if (Array.isArray(data)) {
+    const usd = data.find((e) => e && typeof e.currency === "string" && e.currency.toUpperCase() === "USD");
+    if (usd && typeof usd === "object") {
+      available =
+        toNumberMaybe(usd.total_balance) ??
+        toNumberMaybe(usd.available_balance) ??
+        toNumberMaybe(usd.remaining_balance) ??
+        toNumberMaybe(usd.balance);
+      currency = (usd.currency || "").toUpperCase();
+    }
+  }
+
+  // Handle object payload with `balance_infos` array
+  if (available === null && data && Array.isArray(data.balance_infos)) {
+    const usd = data.balance_infos.find((e) => e && typeof e.currency === "string" && e.currency.toUpperCase() === "USD");
+    const pick = usd || data.balance_infos[0];
+    if (pick && typeof pick === "object") {
+      available =
+        toNumberMaybe(pick.total_balance) ??
+        toNumberMaybe(pick.available_balance) ??
+        toNumberMaybe(pick.remaining_balance) ??
+        toNumberMaybe(pick.balance);
+      currency = (pick.currency || "").toUpperCase();
+    }
+  }
+
+  // If not array or USD not found, try common object field shapes
+  if (available === null) {
+    const tryFields = [
+      "available_balance",
+      "remaining_balance",
+      "balance",
+      "credit",
+      "total_balance",
+      "available",
+    ];
+    for (const f of tryFields) {
+      if (data && (typeof data[f] === "number" || typeof data[f] === "string")) { available = toNumberMaybe(data[f]); break; }
+      if (data && data.data && (typeof data.data[f] === "number" || typeof data.data[f] === "string")) { available = toNumberMaybe(data.data[f]); break; }
+    }
+    if (available === null && data && data.balance && (typeof data.balance.total === "number" || typeof data.balance.total === "string")) {
+      available = toNumberMaybe(data.balance.total);
+    }
+  }
+  try { console.log("[Deepseek] computed available", { available, currency, is_available: data && data.is_available }); } catch {}
+  return { granted: null, used: null, available };
+}
+
+// Public IP helper (for Grok whitelist guidance)
+async function fetchPublicIP() {
+  try {
+    const res = await fetchWithTimeout(
+      "https://api.ipify.org?format=json",
+      { method: "GET", headers: { Accept: "application/json" }, mode: "cors" },
+      10000
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data?.ip === "string" ? data.ip : null;
+  } catch {
+    return null;
+  }
+}
+
+// Grok (xAI): prepaid balance by team
+async function fetchGrokPrepaidBalance(token, teamId) {
+  if (!teamId) throw new Error("Missing Grok team ID");
+  const host = "https://management-api.x.ai";
+  const url = buildProxiedUrl(host, `/v1/billing/teams/${encodeURIComponent(teamId)}/prepaid/balance`);
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      mode: "cors",
+    },
+    20000
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    try { console.error("[Grok] prepaid balance error", { status: res.status, body: text }); } catch {}
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  try { console.log("[Grok] /v1/billing/teams/{team_id}/prepaid/balance payload", data); } catch {}
+  const raw = data && data.total && (data.total.val ?? data.total.value);
+  const n = typeof raw === "string" ? Number(raw) : (typeof raw === "number" ? raw : null);
+  // Heuristic: values are likely cents with negative sign; convert to positive USD available
+  let available = null;
+  if (typeof n === "number" && !Number.isNaN(n)) {
+    available = Math.abs(n) / 100;
+  }
+  return { granted: null, used: null, available };
+}
+
 // Removed session token path
 
 async function refreshOne(id, showModal) {
@@ -857,15 +878,26 @@ async function refreshOne(id, showModal) {
   if (showModal) showLoading(true);
   try {
     let bal;
+    const vendor = acct.vendor || "openai";
     if (acct.adminKey) {
-      bal = await fetchUsageRangeWithAdminKey(acct.adminKey);
+      if (vendor === "deepseek") {
+        bal = await fetchDeepseekBalance(acct.adminKey);
+      } else if (vendor === "grok") {
+        bal = await fetchGrokPrepaidBalance(acct.adminKey, acct.teamId);
+      } else {
+        bal = await fetchUsageRangeWithAdminKey(acct.adminKey);
+      }
     } else {
       throw new Error("No admin key found");
     }
     updateAccount(id, { balance: bal, lastUpdated: Date.now(), error: null });
   } catch (e) {
-    const errMsg = String(e && e.message ? e.message : e);
+    let errMsg = String(e && e.message ? e.message : e);
     const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'openai_cors_proxy'" : "";
+    if ((acct.vendor || "openai") === "grok") {
+      const ip = await fetchPublicIP();
+      if (ip) errMsg += ` • Public IP: ${ip} (whitelist for Grok)`;
+    }
     updateAccount(id, { error: errMsg + corsHint, lastUpdated: Date.now() });
   } finally {
     render();
@@ -879,11 +911,25 @@ async function refreshAllSequential() {
   showLoading(true);
   for (const a of list) {
     try {
-      const bal = a.adminKey ? await fetchUsageRangeWithAdminKey(a.adminKey) : { used: null };
+      let bal = { used: null };
+      if (a.adminKey) {
+        const vendor = a.vendor || "openai";
+        if (vendor === "deepseek") {
+          bal = await fetchDeepseekBalance(a.adminKey);
+        } else if (vendor === "grok") {
+          bal = await fetchGrokPrepaidBalance(a.adminKey, a.teamId);
+        } else {
+          bal = await fetchUsageRangeWithAdminKey(a.adminKey);
+        }
+      }
       updateAccount(a.id, { balance: bal, lastUpdated: Date.now(), error: null });
     } catch (e) {
-      const errMsg = String(e && e.message ? e.message : e);
+      let errMsg = String(e && e.message ? e.message : e);
       const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'openai_cors_proxy'" : "";
+      if ((a.vendor || "openai") === "grok") {
+        const ip = await fetchPublicIP();
+        if (ip) errMsg += ` • Public IP: ${ip} (whitelist for Grok)`;
+      }
       updateAccount(a.id, { error: errMsg + corsHint, lastUpdated: Date.now() });
     }
     render();
@@ -897,14 +943,21 @@ function initEvents() {
       e.preventDefault();
       const name = (els.name.value || "").trim();
       const adminKey = (els.adminKey && els.adminKey.value || "").trim();
+      const vendor = (els.vendor && els.vendor.value) || "openai";
+      const teamId = (els.teamId && els.teamId.value || "").trim();
       if (!name) return;
       if (!adminKey) {
-        alert("Provide an Admin Key.");
+        alert("Provide an API key.");
         return;
       }
-      const id = addAccount(name, adminKey);
+      if (vendor === "grok" && !teamId) {
+        alert("Provide the Grok Team ID.");
+        return;
+      }
+      const id = addAccount(name, adminKey, vendor, { teamId });
       els.name.value = "";
       if (els.adminKey) els.adminKey.value = "";
+      if (els.teamId) els.teamId.value = "";
       if (els.addKeyModal) els.addKeyModal.classList.add("hidden");
       render();
       await refreshOne(id, true);
@@ -976,35 +1029,12 @@ function initEvents() {
       await refreshAllSequential();
     });
   }
-
-  if (els.authRegister) {
-    els.authRegister.addEventListener("click", (e) => {
-      e.preventDefault();
-      handleMasterAuthRegister();
-    });
-  }
-  if (els.authLogin) {
-    els.authLogin.addEventListener("click", (e) => {
-      e.preventDefault();
-      handleMasterAuthLogin();
-    });
-  }
-  if (els.authLogout) {
-    els.authLogout.addEventListener("click", (e) => {
-      e.preventDefault();
-      handleMasterAuthLogout();
-    });
-  }
 }
 
 function init() {
   render();
   initEvents();
   updateRangeLabel();
-  updateAuthFormFromProfile();
-  updateAuthLastSyncLabel();
-  updateAuthUI();
-  attemptAutoSyncFromCookie();
 }
 
 document.addEventListener("DOMContentLoaded", init);
