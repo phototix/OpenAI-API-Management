@@ -1,6 +1,28 @@
 const STORAGE_KEY = "openai_accounts_v1";
 const CORS_PROXY_KEY = "openai_cors_proxy";
 const RANGE_KEY = "openai_usage_range"; // '1d' | '7d' | '1m' | '3m'
+const MASTER_AUTH_BASE = "https://n8n.brandon.my/webhook/v1/api";
+const MASTER_AUTH_PROFILE_KEY = "masterauth_profile_v1";
+const MASTER_AUTH_LAST_SYNC_KEY = "masterauth_last_sync_v1";
+const MASTER_AUTH_RESERVED_KEYS = new Set([MASTER_AUTH_PROFILE_KEY, MASTER_AUTH_LAST_SYNC_KEY]);
+const MASTER_AUTH_DEFAULT_APPS = "post-man-test";
+const MASTER_AUTH_PASSWORD_COOKIE = "masterauth_password_key";
+const MASTER_AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
+const AUTH_STATUS_CLASS_MAP = {
+  info: "text-gray-600",
+  success: "text-green-600",
+  error: "text-red-600",
+  warning: "text-amber-600",
+};
+
+function safeJSONParse(str) {
+  if (typeof str !== "string") return str;
+  try {
+    return JSON.parse(str);
+  } catch {
+    return str;
+  }
+}
 
 const els = {
   form: document.getElementById("apiKeyForm"),
@@ -24,11 +46,174 @@ const els = {
   saveRange: document.getElementById("saveRange"),
   cancelRange: document.getElementById("cancelRange"),
   currentRangeLabel: document.getElementById("currentRangeLabel"),
-  infoModal: document.getElementById("infoModal"),
-  openInfoModal: document.getElementById("openInfoModal"),
-  closeInfoModal: document.getElementById("closeInfoModal"),
-  dismissInfoModal: document.getElementById("dismissInfoModal"),
+  // MasterAuth elements
+  authEmail: document.getElementById("authEmail"),
+  authPassword: document.getElementById("authPassword"),
+  authApps: document.getElementById("authApps"),
+  authRegister: document.getElementById("authRegister"),
+  authLogin: document.getElementById("authLogin"),
+  authStatusMessage: document.getElementById("authStatusMessage"),
+  authLastSyncLabel: document.getElementById("authLastSyncLabel"),
+  authLoggedInSection: document.getElementById("authLoggedInSection"),
+  authCredentialsSection: document.getElementById("authCredentialsSection"),
+  authLoggedInEmail: document.getElementById("authLoggedInEmail"),
+  authLogout: document.getElementById("authLogout"),
 };
+
+function getDefaultAppIdentifier() {
+  try {
+    if (typeof window !== "undefined" && window.location && window.location.hostname) {
+      const host = window.location.hostname.trim();
+      if (host && host !== "localhost") {
+        return host;
+      }
+    }
+  } catch {}
+  return MASTER_AUTH_DEFAULT_APPS;
+}
+
+function setPasswordKeyCookie(value) {
+  if (typeof document === "undefined") return;
+  const safeValue = encodeURIComponent(value || "");
+  document.cookie = `${MASTER_AUTH_PASSWORD_COOKIE}=${safeValue};path=/;max-age=${MASTER_AUTH_COOKIE_MAX_AGE_SECONDS};SameSite=Lax`;
+}
+
+function getPasswordKeyCookie() {
+  if (typeof document === "undefined" || !document.cookie) return "";
+  const parts = document.cookie.split(";").map((c) => c.trim());
+  for (const part of parts) {
+    if (part.startsWith(`${MASTER_AUTH_PASSWORD_COOKIE}=`)) {
+      return decodeURIComponent(part.substring(MASTER_AUTH_PASSWORD_COOKIE.length + 1));
+    }
+  }
+  return "";
+}
+
+function clearPasswordKeyCookie() {
+  if (typeof document === "undefined") return;
+  document.cookie = `${MASTER_AUTH_PASSWORD_COOKIE}=;path=/;max-age=0;SameSite=Lax`;
+}
+
+function getMasterAuthProfile() {
+  try {
+    const raw = localStorage.getItem(MASTER_AUTH_PROFILE_KEY);
+    if (!raw) return null;
+    const profile = JSON.parse(raw);
+    return profile && typeof profile === "object" ? profile : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveMasterAuthProfile(profile) {
+  if (!profile || typeof profile !== "object") return;
+  const normalized = { ...profile, apps: profile.apps || getDefaultAppIdentifier() };
+  localStorage.setItem(MASTER_AUTH_PROFILE_KEY, JSON.stringify(normalized));
+}
+
+function getLastSyncMeta() {
+  try {
+    const raw = localStorage.getItem(MASTER_AUTH_LAST_SYNC_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setLastSyncMeta(meta) {
+  if (!meta || typeof meta !== "object") return;
+  localStorage.setItem(MASTER_AUTH_LAST_SYNC_KEY, JSON.stringify(meta));
+  updateAuthLastSyncLabel(meta);
+}
+
+function updateAuthFormFromProfile() {
+  const profile = getMasterAuthProfile();
+  if (els.authEmail) els.authEmail.value = (profile && profile.email) || "";
+  if (els.authApps) {
+    els.authApps.value = getDefaultAppIdentifier();
+    els.authApps.setAttribute("readonly", "readonly");
+  }
+  if (els.authPassword) els.authPassword.value = "";
+}
+
+function updateAuthLastSyncLabel(meta) {
+  if (!els.authLastSyncLabel) return;
+  const info = meta || getLastSyncMeta();
+  if (!info || !info.timestamp) {
+    els.authLastSyncLabel.textContent = "Last sync: Never";
+    return;
+  }
+  const when = new Date(info.timestamp);
+  const direction = info.direction === "download" ? "from cloud" : "to cloud";
+  const formatted = Number.isNaN(when.getTime()) ? "unknown" : when.toLocaleString();
+  els.authLastSyncLabel.textContent = `Last sync (${direction}): ${formatted}`;
+}
+
+function setAuthStatus(message, variant = "info") {
+  if (!els.authStatusMessage) return;
+  els.authStatusMessage.classList.remove("text-gray-600", "text-green-600", "text-red-600", "text-amber-600");
+  const cls = AUTH_STATUS_CLASS_MAP[variant] || AUTH_STATUS_CLASS_MAP.info;
+  els.authStatusMessage.classList.add(cls);
+  els.authStatusMessage.textContent = message;
+}
+
+// Lightweight toast notification
+function showToast(message, variant = "success", timeout = 2500) {
+  try {
+    const baseColor = variant === "error" ? "bg-red-600" : variant === "warning" ? "bg-amber-600" : variant === "info" ? "bg-gray-800" : "bg-green-600";
+    const el = document.createElement("div");
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    el.className = `fixed left-1/2 -translate-x-1/2 bottom-6 ${baseColor} text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-all duration-300 opacity-0 translate-y-2`;
+    el.textContent = message;
+    document.body.appendChild(el);
+    // enter
+    requestAnimationFrame(() => {
+      el.classList.remove("opacity-0", "translate-y-2");
+      el.classList.add("opacity-100", "translate-y-0");
+    });
+    // exit
+    setTimeout(() => {
+      el.classList.remove("opacity-100", "translate-y-0");
+      el.classList.add("opacity-0", "translate-y-2");
+      setTimeout(() => {
+        el.remove();
+      }, 300);
+    }, Math.max(1200, timeout | 0));
+  } catch {}
+}
+
+function setAuthBusy(busy) {
+  const buttons = [els.authRegister, els.authLogin, els.authLogout];
+  buttons.forEach((btn) => {
+    if (!btn) return;
+    btn.disabled = !!busy;
+    btn.classList.toggle("opacity-60", !!busy);
+    btn.classList.toggle("cursor-not-allowed", !!busy);
+  });
+}
+
+function getAuthFormValues() {
+  const email = (els.authEmail && els.authEmail.value || "").trim();
+  const password = (els.authPassword && els.authPassword.value || "").trim();
+  const apps = getDefaultAppIdentifier();
+  return { email, password, apps };
+}
+
+function updateAuthUI() {
+  const passwordKey = getPasswordKeyCookie();
+  const profile = getMasterAuthProfile();
+  const hasLogin = !!(passwordKey && profile && profile.email);
+  if (hasLogin) {
+    if (els.authLoggedInSection) els.authLoggedInSection.classList.remove("hidden");
+    if (els.authCredentialsSection) els.authCredentialsSection.classList.add("hidden");
+    if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = profile.email;
+  } else {
+    if (els.authLoggedInSection) els.authLoggedInSection.classList.add("hidden");
+    if (els.authCredentialsSection) els.authCredentialsSection.classList.remove("hidden");
+    if (els.authLoggedInEmail) els.authLoggedInEmail.textContent = "";
+  }
+}
 
 function getAccounts() {
   try {
@@ -489,71 +674,6 @@ function getProxyBase() {
   const v = localStorage.getItem(CORS_PROXY_KEY);
   if (!v) return "";
   return v.replace(/\/$/, "");
-}
-
-function getSyncBase() {
-  const v = localStorage.getItem(SYNC_BASE_KEY);
-  if (!v) return "";
-  return v.replace(/\/$/, "");
-}
-
-async function uploadConfigsManual() {
-  const base = getSyncBase();
-  if (!base) {
-    alert("No sync server configured. Set it with localStorage.setItem('openai_sync_base','https://your-server.example')");
-    return;
-  }
-  const proceed = confirm(`Upload will expose your saved API keys and configuration to the cloud server at: ${base}\n\nContinue?`);
-  if (!proceed) return;
-  try {
-    const body = { accounts: getAccounts() };
-    const res = await fetchWithTimeout(
-      base + "/upload",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(body),
-        mode: "cors",
-      },
-      20000
-    );
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status} ${t || ""}`);
-    }
-    alert("Upload complete.");
-  } catch (e) {
-    alert("Upload failed: " + (e && e.message ? e.message : String(e)));
-  }
-}
-
-async function downloadConfigsManual() {
-  const base = getSyncBase();
-  if (!base) {
-    alert("No sync server configured. Set it with localStorage.setItem('openai_sync_base','https://your-server.example')");
-    return;
-  }
-  const proceed = confirm(`Download will replace your local configs with the server's copy from: ${base}\n\nContinue?`);
-  if (!proceed) return;
-  try {
-    const res = await fetchWithTimeout(
-      base + "/download",
-      { method: "GET", headers: { Accept: "application/json" }, mode: "cors" },
-      20000
-    );
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status} ${t || ""}`);
-    }
-    const data = await res.json();
-    const list = (data && Array.isArray(data.accounts)) ? data.accounts : (Array.isArray(data) ? data : null);
-    if (!list) throw new Error("Invalid payload");
-    saveAccounts(list);
-    render();
-    alert("Download complete. Local configs replaced.");
-  } catch (e) {
-    alert("Download failed: " + (e && e.message ? e.message : String(e)));
-  }
 }
 
 // Build a URL that optionally routes via a CORS proxy.
@@ -1028,14 +1148,6 @@ function initEvents() {
     els.refreshAll.addEventListener("click", () => {
       refreshAllSequential();
     });
-  }
-
-  // Manual Upload/Download with explicit confirmation
-  if (els.uploadBtn) {
-    els.uploadBtn.addEventListener("click", uploadConfigsManual);
-  }
-  if (els.downloadBtn) {
-    els.downloadBtn.addEventListener("click", downloadConfigsManual);
   }
 
   if (els.clearAll) {
