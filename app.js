@@ -1,6 +1,7 @@
 const STORAGE_KEY = "openai_accounts_v1";
 const CORS_PROXY_KEY = "openai_cors_proxy";
 const RANGE_KEY = "openai_usage_range"; // '1d' | '7d' | '1m' | '3m'
+const SYNC_BASE_KEY = "openai_sync_base"; // optional: base URL for manual upload/download
 
 const els = {
   form: document.getElementById("apiKeyForm"),
@@ -24,6 +25,8 @@ const els = {
   saveRange: document.getElementById("saveRange"),
   cancelRange: document.getElementById("cancelRange"),
   currentRangeLabel: document.getElementById("currentRangeLabel"),
+  uploadBtn: document.getElementById("uploadConfigsBtn"),
+  downloadBtn: document.getElementById("downloadConfigsBtn"),
   infoModal: document.getElementById("infoModal"),
   openInfoModal: document.getElementById("openInfoModal"),
   closeInfoModal: document.getElementById("closeInfoModal"),
@@ -188,6 +191,71 @@ function getProxyBase() {
   const v = localStorage.getItem(CORS_PROXY_KEY);
   if (!v) return "";
   return v.replace(/\/$/, "");
+}
+
+function getSyncBase() {
+  const v = localStorage.getItem(SYNC_BASE_KEY);
+  if (!v) return "";
+  return v.replace(/\/$/, "");
+}
+
+async function uploadConfigsManual() {
+  const base = getSyncBase();
+  if (!base) {
+    alert("No sync server configured. Set it with localStorage.setItem('openai_sync_base','https://your-server.example')");
+    return;
+  }
+  const proceed = confirm(`Upload will expose your saved API keys and configuration to the cloud server at: ${base}\n\nContinue?`);
+  if (!proceed) return;
+  try {
+    const body = { accounts: getAccounts() };
+    const res = await fetchWithTimeout(
+      base + "/upload",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(body),
+        mode: "cors",
+      },
+      20000
+    );
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status} ${t || ""}`);
+    }
+    alert("Upload complete.");
+  } catch (e) {
+    alert("Upload failed: " + (e && e.message ? e.message : String(e)));
+  }
+}
+
+async function downloadConfigsManual() {
+  const base = getSyncBase();
+  if (!base) {
+    alert("No sync server configured. Set it with localStorage.setItem('openai_sync_base','https://your-server.example')");
+    return;
+  }
+  const proceed = confirm(`Download will replace your local configs with the server's copy from: ${base}\n\nContinue?`);
+  if (!proceed) return;
+  try {
+    const res = await fetchWithTimeout(
+      base + "/download",
+      { method: "GET", headers: { Accept: "application/json" }, mode: "cors" },
+      20000
+    );
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status} ${t || ""}`);
+    }
+    const data = await res.json();
+    const list = (data && Array.isArray(data.accounts)) ? data.accounts : (Array.isArray(data) ? data : null);
+    if (!list) throw new Error("Invalid payload");
+    saveAccounts(list);
+    render();
+    alert("Download complete. Local configs replaced.");
+  } catch (e) {
+    alert("Download failed: " + (e && e.message ? e.message : String(e)));
+  }
 }
 
 // Build a URL that optionally routes via a CORS proxy.
@@ -662,6 +730,14 @@ function initEvents() {
     els.refreshAll.addEventListener("click", () => {
       refreshAllSequential();
     });
+  }
+
+  // Manual Upload/Download with explicit confirmation
+  if (els.uploadBtn) {
+    els.uploadBtn.addEventListener("click", uploadConfigsManual);
+  }
+  if (els.downloadBtn) {
+    els.downloadBtn.addEventListener("click", downloadConfigsManual);
   }
 
   if (els.clearAll) {

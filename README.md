@@ -142,6 +142,23 @@ Security note: Never use public/unknown proxies with secrets. Run your own (Clou
 - `openai_accounts_v1`: Array of saved accounts `{ id, name, vendor, adminKey, lastUpdated, balance, error }`.
 - `openai_cors_proxy`: Optional base URL to a CORS‑enabled reverse proxy.
 - `openai_usage_range`: One of `1d`, `3d`, `7d`, `1m`.
+- `openai_sync_base`: Optional base URL for manual Upload/Download (e.g., `https://your-server.example`). The app will call `GET {base}/download` and `POST {base}/upload` only when you click the buttons and confirm.
+
+## Manual Upload/Download (Optional)
+
+The app does not auto‑sync. If you want manual control:
+
+1. Configure your server URL in the browser console:
+
+  ```js
+  localStorage.setItem('openai_sync_base','https://your-server.example');
+  ```
+
+2. Use the new “Upload” and “Download” buttons:
+  - Upload: You will be prompted that this exposes your saved API keys/configs to your server, then `POST {base}/upload` with `{ accounts: [...] }`.
+  - Download: You will be prompted that this replaces your local configs, then `GET {base}/download` and replace `openai_accounts_v1` with the received list.
+
+Security: Only use a server you fully control. Uploaded data may include API keys depending on your stored accounts. Ensure HTTPS and proper server protections.
 
 ## Project Structure
 
