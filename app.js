@@ -1187,6 +1187,8 @@ function initEvents() {
   if (els.openAddKeyModal && els.addKeyModal) {
     els.openAddKeyModal.addEventListener("click", () => {
       els.addKeyModal.classList.remove("hidden");
+      const v = (els.vendor && els.vendor.value) || "openai";
+      if (els.teamIdRow) els.teamIdRow.classList.toggle("hidden", v !== "grok");
     });
   }
   if (els.closeAddKeyModal) {
@@ -1218,6 +1220,17 @@ function initEvents() {
       setRangeSetting(sel.value);
       els.rangeModal.classList.add("hidden");
       await refreshAllSequential();
+    });
+  }
+
+  // Toggle Team ID field for Grok provider
+  if (els.vendor && els.teamIdRow) {
+    els.vendor.addEventListener("change", () => {
+      const v = els.vendor.value;
+      els.teamIdRow.classList.toggle("hidden", v !== "grok");
+      if (v !== "grok" && els.teamId) {
+        els.teamId.value = "";
+      }
     });
   }
 
