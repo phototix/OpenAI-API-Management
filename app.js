@@ -31,6 +31,8 @@ const els = {
   adminKey: document.getElementById("adminKey"),
   teamId: document.getElementById("teamId"),
   teamIdRow: document.getElementById("teamIdRow"),
+  gdcBillingAccountId: document.getElementById("gdcBillingAccountId"),
+  gdcBillingAccountRow: document.getElementById("gdcBillingAccountRow"),
   addKeyModal: document.getElementById("addKeyModal"),
   openAddKeyModal: document.getElementById("openAddKeyModal"),
   closeAddKeyModal: document.getElementById("closeAddKeyModal"),
@@ -238,6 +240,7 @@ function addAccount(name, adminKey, vendor = "openai", extra = {}) {
   const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
   const account = { id, name, vendor: vendor || "openai", adminKey: adminKey || "", lastUpdated: null, balance: null, error: null };
   if (vendor === "grok" && extra && extra.teamId) account.teamId = extra.teamId;
+  if (vendor === "google" && extra && extra.billingAccountId) account.billingAccountId = extra.billingAccountId;
   list.push(account);
   saveAccounts(list);
   return id;
@@ -287,19 +290,23 @@ function accountCardHTML(a) {
   const err = a.error ? String(a.error) : "";
 
   const secretForLabel = a.adminKey || "";
-  const vendorName = vendor === "openai" ? "OpenAI" : vendor === "deepseek" ? "Deepseek" : vendor === "grok" ? "Grok" : (vendor || "").toUpperCase();
+  const vendorName = vendor === "openai" ? "OpenAI" : vendor === "deepseek" ? "Deepseek" : vendor === "grok" ? "Grok" : vendor === "google" ? "Google AI Studio" : (vendor || "").toUpperCase();
   const vendorBadgeClass = vendor === "openai"
     ? "bg-purple-100 text-purple-800"
     : vendor === "deepseek"
     ? "bg-teal-100 text-teal-800"
     : vendor === "grok"
     ? "bg-amber-100 text-amber-800"
+    : vendor === "google"
+    ? "bg-blue-100 text-blue-800"
     : "bg-gray-100 text-gray-800";
   const teamBadge = vendor === "grok" && a.teamId
     ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">Team: ${a.teamId}</span>`
     : "";
   const extraInfo = vendor === "grok" && a.teamId
     ? `Team: ${a.teamId}`
+    : vendor === "google" && a.billingAccountId
+    ? `Billing Account: ${a.billingAccountId}`
     : ""; // Future: show Org ID if stored for OpenAI
   return `
     <div class="balance-card border border-gray-200 rounded-xl p-5 fade-in">
@@ -1061,6 +1068,38 @@ async function fetchGrokPrepaidBalance(token, teamId) {
   return { granted: null, used: null, available };
 }
 
+// Google AI Studio via GDC Billing Pricing API: Pricing API does not provide balances.
+// We return a structured error and placeholder values.
+async function fetchGooglePricingBalance(apiKey, billingAccountId) {
+  // Validate inputs
+  if (!billingAccountId) throw new Error("Missing Google Billing Account ID");
+  if (!apiKey) throw new Error("Missing Google API key");
+
+  // Attempt a lightweight call to verify API key works: list services
+  // Endpoint: https://cloudbilling.googleapis.com/v1/services?key=API_KEY
+  // Note: cross-origin requests may be blocked; recommend using a proxy.
+  const host = "https://cloudbilling.googleapis.com";
+  const url = buildProxiedUrl(host, `/v1/services?key=${encodeURIComponent(apiKey)}`);
+  try {
+    const res = await fetchWithTimeout(
+      url,
+      { method: "GET", headers: { Accept: "application/json" }, mode: "cors" },
+      20000
+    );
+    // Ignore body; the goal is connectivity.
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Pricing API HTTP ${res.status}${text ? `: ${text.slice(0, 120)}` : ""}`);
+    }
+  } catch (err) {
+    const corsHint = String(err && err.message || "").includes("Failed to fetch") ? " • CORS blocked: set a proxy in localStorage key 'openai_cors_proxy'" : "";
+    throw new Error(`Google Pricing API check failed: ${err.message}${corsHint}`);
+  }
+
+  // Informative placeholder: Pricing API does not expose balances.
+  return { granted: null, used: null, available: null };
+}
+
 // Removed session token path
 
 async function refreshOne(id, showModal) {
@@ -1075,6 +1114,8 @@ async function refreshOne(id, showModal) {
         bal = await fetchDeepseekBalance(acct.adminKey);
       } else if (vendor === "grok") {
         bal = await fetchGrokPrepaidBalance(acct.adminKey, acct.teamId);
+      } else if (vendor === "google") {
+        bal = await fetchGooglePricingBalance(acct.adminKey, acct.billingAccountId);
       } else {
         bal = await fetchUsageRangeWithAdminKey(acct.adminKey);
       }
@@ -1109,6 +1150,8 @@ async function refreshAllSequential() {
           bal = await fetchDeepseekBalance(a.adminKey);
         } else if (vendor === "grok") {
           bal = await fetchGrokPrepaidBalance(a.adminKey, a.teamId);
+        } else if (vendor === "google") {
+          bal = await fetchGooglePricingBalance(a.adminKey, a.billingAccountId);
         } else {
           bal = await fetchUsageRangeWithAdminKey(a.adminKey);
         }
@@ -1136,6 +1179,7 @@ function initEvents() {
       const adminKey = (els.adminKey && els.adminKey.value || "").trim();
       const vendor = (els.vendor && els.vendor.value) || "openai";
       const teamId = (els.teamId && els.teamId.value || "").trim();
+      const billingAccountId = (els.gdcBillingAccountId && els.gdcBillingAccountId.value || "").trim();
       if (!name) return;
       if (!adminKey) {
         alert("Provide an API key.");
@@ -1145,10 +1189,15 @@ function initEvents() {
         alert("Provide the Grok Team ID.");
         return;
       }
-      const id = addAccount(name, adminKey, vendor, { teamId });
+      if (vendor === "google" && !billingAccountId) {
+        alert("Provide the Google Billing Account ID.");
+        return;
+      }
+      const id = addAccount(name, adminKey, vendor, { teamId, billingAccountId });
       els.name.value = "";
       if (els.adminKey) els.adminKey.value = "";
       if (els.teamId) els.teamId.value = "";
+      if (els.gdcBillingAccountId) els.gdcBillingAccountId.value = "";
       if (els.addKeyModal) els.addKeyModal.classList.add("hidden");
       render();
       await refreshOne(id, true);
@@ -1189,6 +1238,7 @@ function initEvents() {
       els.addKeyModal.classList.remove("hidden");
       const v = (els.vendor && els.vendor.value) || "openai";
       if (els.teamIdRow) els.teamIdRow.classList.toggle("hidden", v !== "grok");
+      if (els.gdcBillingAccountRow) els.gdcBillingAccountRow.classList.toggle("hidden", v !== "google");
     });
   }
   if (els.closeAddKeyModal) {
@@ -1228,8 +1278,12 @@ function initEvents() {
     els.vendor.addEventListener("change", () => {
       const v = els.vendor.value;
       els.teamIdRow.classList.toggle("hidden", v !== "grok");
+      if (els.gdcBillingAccountRow) els.gdcBillingAccountRow.classList.toggle("hidden", v !== "google");
       if (v !== "grok" && els.teamId) {
         els.teamId.value = "";
+      }
+      if (v !== "google" && els.gdcBillingAccountId) {
+        els.gdcBillingAccountId.value = "";
       }
     });
   }

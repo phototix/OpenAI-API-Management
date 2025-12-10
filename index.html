@@ -242,6 +242,7 @@
                         <option value="openai">OpenAI</option>
                         <option value="deepseek">Deepseek</option>
                         <option value="grok">Grok (xAI)</option>
+                                                <option value="google">Google AI Studio (GDC Billing)</option>
                     </select>
                 </div>
                 <div>
@@ -252,10 +253,14 @@
                     <label for="teamId" class="block text-sm font-medium text-gray-700 mb-1">Team ID (Grok)</label>
                     <input type="text" id="teamId" placeholder="e.g., 65c1e471-205f-4566-9c5a-07198bcdf4ce" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                 </div>
+                                <div id="gdcBillingAccountRow" class="hidden">
+                                        <label for="gdcBillingAccountId" class="block text-sm font-medium text-gray-700 mb-1">Billing Account ID (Google)</label>
+                                        <input type="text" id="gdcBillingAccountId" placeholder="e.g., 0123AB-456789-ABCDEF" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                </div>
                 <div>
                     <label for="adminKey" class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
                     <input type="password" id="adminKey" placeholder="Paste your API key for the selected provider" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent api-key-input" required>
-                    <p class="text-xs text-gray-500 mt-1">OpenAI: uses <code>/v1/organization/costs</code> with start_time/end_time. Deepseek: uses <code>GET https://api.deepseek.com/user/balance</code>. Grok (xAI): uses <code>GET https://management-api.x.ai/v1/billing/teams/{team_id}/prepaid/balance</code>.</p>
+                                        <p class="text-xs text-gray-500 mt-1">OpenAI: uses <code>/v1/organization/costs</code> with start_time/end_time. Deepseek: uses <code>GET https://api.deepseek.com/user/balance</code>. Grok (xAI): uses <code>GET https://management-api.x.ai/v1/billing/teams/{team_id}/prepaid/balance</code>. Google AI Studio (GDC Billing): consults <code>Cloud Billing Pricing API</code> for SKU pricing. Note: Pricing API does not expose per-account credit balances.</p>
                 </div>
                 <div class="flex justify-end space-x-2">
                     <button type="button" id="cancelAddKey" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Cancel</button>
@@ -266,6 +271,37 @@
             </form>
         </div>
     </div>
+        <script>
+            // Quick inline helper to show Google field before app.js initializes
+            document.addEventListener('DOMContentLoaded', function() {
+                const vendor = document.getElementById('vendorSelect');
+                const googleRow = document.getElementById('gdcBillingAccountRow');
+                const teamRow = document.getElementById('teamIdRow');
+                if (vendor && googleRow && teamRow) {
+                    const toggle = () => {
+                        const v = vendor.value;
+                        googleRow.classList.toggle('hidden', v !== 'google');
+                        teamRow.classList.toggle('hidden', v !== 'grok');
+                    };
+                    vendor.addEventListener('change', toggle);
+                    toggle();
+                }
+            });
+        </script>
     <script src="app.js?version=1.8"></script>
+    
+        <!-- Google AI Studio (GDC Billing) Notes -->
+        <div class="container mx-auto px-4 py-6 max-w-4xl">
+            <section class="bg-white rounded-2xl shadow p-5">
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Google AI Studio via GDC Billing</h3>
+                <ul class="text-sm text-gray-700 list-disc pl-5 space-y-2">
+                    <li>Enable the <strong>Cloud Billing Catalog API</strong> (Pricing API) in your Google Cloud project.</li>
+                    <li>Create an API key or an OAuth token with access to the Pricing API. Restrict it to your project.</li>
+                    <li>Find your <strong>Billing Account ID</strong> (format like <code>0123AB-456789-ABCDEF</code>) in Google Cloud Console &gt; Billing.</li>
+                    <li>Limitations: The Pricing API provides SKU pricing, not your remaining credits or balance. For spend tracking, use <em>Cloud Billing export to BigQuery</em> or Budgets.</li>
+                    <li>Reference: Google Cloud Billing Pricing API REST (Services and SKUs list endpoints).</li>
+                </ul>
+            </section>
+        </div>
 </body>
 </html>
