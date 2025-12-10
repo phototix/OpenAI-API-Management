@@ -1,7 +1,6 @@
 const STORAGE_KEY = "openai_accounts_v1";
 const CORS_PROXY_KEY = "openai_cors_proxy";
 const RANGE_KEY = "openai_usage_range"; // '1d' | '7d' | '1m' | '3m'
-const SYNC_BASE_KEY = "openai_sync_base"; // optional: base URL for manual upload/download
 
 const els = {
   form: document.getElementById("apiKeyForm"),
@@ -25,8 +24,6 @@ const els = {
   saveRange: document.getElementById("saveRange"),
   cancelRange: document.getElementById("cancelRange"),
   currentRangeLabel: document.getElementById("currentRangeLabel"),
-  uploadBtn: document.getElementById("uploadConfigsBtn"),
-  downloadBtn: document.getElementById("downloadConfigsBtn"),
   infoModal: document.getElementById("infoModal"),
   openInfoModal: document.getElementById("openInfoModal"),
   closeInfoModal: document.getElementById("closeInfoModal"),
@@ -184,6 +181,307 @@ async function fetchWithTimeout(resource, options = {}, timeoutMs = 20000) {
     return res;
   } finally {
     clearTimeout(id);
+  }
+}
+
+function buildQueryParams(payload = {}) {
+  const params = new URLSearchParams();
+  Object.entries(payload || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    const encoded = typeof value === "object" ? JSON.stringify(value) : value;
+    params.append(key, encoded);
+  });
+  return params.toString();
+}
+
+async function masterAuthRequest(path, method = "POST", payload = {}) {
+  const trimmedPath = path.replace(/^\/+/, "");
+  let url = `${MASTER_AUTH_BASE.replace(/\/$/, "")}/${trimmedPath}`;
+  const options = {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  };
+  if (method === "GET") {
+    const qs = buildQueryParams(payload);
+    if (qs) url += `?${qs}`;
+  } else {
+    options.body = JSON.stringify(payload || {});
+  }
+  const res = await fetchWithTimeout(url, options, 20000);
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+  if (!res.ok) {
+    const statusText = (data && (data.status || data.success)) || `HTTP ${res.status}`;
+    throw new Error(statusText);
+  }
+  return data || {};
+}
+
+function collectAppDataForUpload() {
+  const snapshot = {};
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key || MASTER_AUTH_RESERVED_KEYS.has(key)) continue;
+    const value = localStorage.getItem(key);
+    snapshot[key] = safeJSONParse(value);
+  }
+  return snapshot;
+}
+
+function normalizeRemoteAppData(payload) {
+  if (payload == null) return null;
+  let data = payload;
+  let depth = 0;
+  while (typeof data === "string" && depth < 3) {
+    const parsed = safeJSONParse(data);
+    if (parsed === data) break;
+    data = parsed;
+    depth += 1;
+  }
+  if (Array.isArray(data)) {
+    const firstObject = data.find((entry) => entry && typeof entry === "object");
+    if (!firstObject) return null;
+    data = firstObject;
+  }
+  if (data === null) return null;
+  const isObject = typeof data === "object" && !Array.isArray(data);
+  return isObject && Object.keys(data).length ? data : null;
+}
+
+function applyRemoteAppData(remoteData) {
+  if (!remoteData || typeof remoteData !== "object") return;
+  const toRemove = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key || MASTER_AUTH_RESERVED_KEYS.has(key)) continue;
+    toRemove.push(key);
+  }
+  toRemove.forEach((key) => localStorage.removeItem(key));
+  Object.entries(remoteData).forEach(([key, value]) => {
+    if (!key || MASTER_AUTH_RESERVED_KEYS.has(key) || value === undefined) return;
+    if (typeof value === "object") {
+      localStorage.setItem(key, JSON.stringify(value));
+    } else {
+      localStorage.setItem(key, String(value));
+    }
+  });
+  render();
+}
+
+async function handleMasterAuthRegister() {
+  const { email, password, apps } = getAuthFormValues();
+  if (!email || !password || !apps) {
+    setAuthStatus("Email, password, and app identifier are required.", "warning");
+    return;
+  }
+  setAuthBusy(true);
+  try {
+    const res = await masterAuthRequest("auth/register", "POST", { email, password, apps });
+    if (res.status === "success-registered") {
+      const profile = { email, apps, password_key: res.password_key || null, session: res.session || null };
+      saveMasterAuthProfile(profile);
+      updateAuthFormFromProfile();
+      setAuthStatus("Registration successful. Password key saved.", "success");
+      updateAuthUI();
+    } else {
+      setAuthStatus(res.status || "Registration failed.", res.status ? "warning" : "error");
+    }
+  } catch (err) {
+    setAuthStatus(`Register failed: ${err.message}`, "error");
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+async function handleMasterAuthLogin() {
+  const { email, password, apps } = getAuthFormValues();
+  if (!email || !password || !apps) {
+    setAuthStatus("Email, password, and app identifier are required.", "warning");
+    return;
+  }
+  setAuthBusy(true);
+  try {
+    const res = await masterAuthRequest("auth/login", "POST", { email, apps, password });
+    if (res.status === "success-login") {
+      const passwordKey = res.password_key || getPasswordKeyCookie();
+      if (!passwordKey) {
+        setAuthStatus("Password key missing from response. Try again.", "warning");
+        return;
+      }
+      setPasswordKeyCookie(passwordKey);
+      const profile = { email, apps, password_key: passwordKey, session: res.session || null };
+      saveMasterAuthProfile(profile);
+      updateAuthFormFromProfile();
+      setAuthStatus("Login successful. Syncing dashboard data...", "info");
+      await synchronizeWithCloud(profile, "login");
+      updateAuthLastSyncLabel();
+      updateAuthUI();
+    } else {
+      setAuthStatus(res.status || "Login failed.", res.status ? "warning" : "error");
+    }
+  } catch (err) {
+    setAuthStatus(`Login failed: ${err.message}`, "error");
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+function stableStringify(obj) {
+  const seen = new WeakSet();
+  const helper = (value) => {
+    if (value && typeof value === "object") {
+      if (seen.has(value)) return '"[Circular]"';
+      seen.add(value);
+      if (Array.isArray(value)) {
+        return `[${value.map((v) => helper(v)).join(",")}]`;
+      }
+      const keys = Object.keys(value).sort();
+      const parts = keys.map((k) => `${JSON.stringify(k)}:${helper(value[k])}`);
+      return `{${parts.join(",")}}`;
+    }
+    return JSON.stringify(value);
+  };
+  return helper(obj);
+}
+
+async function handleMasterAuthLogout() {
+  // Best-effort sync on logout if data changed
+  const profile = getMasterAuthProfile();
+  const passwordKey = getPasswordKeyCookie();
+  if (!profile || !profile.email || !passwordKey) {
+    // Nothing to do, just clear any cookie and reset UI
+    clearPasswordKeyCookie();
+    saveMasterAuthProfile({ email: (profile && profile.email) || "", apps: getDefaultAppIdentifier(), password_key: null, session: null });
+    updateAuthUI();
+    setAuthStatus("Logged out.", "success");
+    return;
+  }
+
+  setAuthBusy(true);
+  try {
+    const payload = { email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: passwordKey };
+    let remoteData = null;
+    try {
+      const res = await masterAuthRequest("config/app", "GET", payload);
+      remoteData = normalizeRemoteAppData(res.data);
+    } catch (e) {
+      // ignore fetch error here; we'll still try to upload if needed
+      remoteData = null;
+    }
+
+    const localData = collectAppDataForUpload();
+    const localStr = stableStringify(localData);
+    const remoteStr = stableStringify(remoteData || {});
+    const changed = localStr !== remoteStr;
+
+    if (changed) {
+      try {
+        await masterAuthRequest("config/app", "POST", { ...payload, app_data: localData });
+        setLastSyncMeta({ direction: "upload", timestamp: Date.now(), serverTimestamp: new Date().toISOString() });
+        setAuthStatus("Changes saved to cloud. Logged out.", "success");
+        showToast("Synced just now", "success", 2200);
+      } catch (err) {
+        setAuthStatus(`Logout: failed to upload changes (${err.message}). Logged out locally.`, "warning");
+      }
+    } else {
+      setAuthStatus("No changes detected. Logged out.", "success");
+    }
+  } finally {
+    // Clear credentials regardless of upload result
+    clearPasswordKeyCookie();
+    saveMasterAuthProfile({ email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: null, session: null });
+    updateAuthUI();
+    setAuthBusy(false);
+  }
+}
+
+function parseRemoteTimestamp(value) {
+  if (!value || value === "new-data") return 0;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const ts = Date.parse(value);
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+function getLocalSyncTimestamp(meta = getLastSyncMeta()) {
+  if (!meta) return 0;
+  const remote = parseRemoteTimestamp(meta.serverTimestamp);
+  if (remote) return remote;
+  return typeof meta.timestamp === "number" ? meta.timestamp : 0;
+}
+
+async function synchronizeWithCloud(profile, reason = "auto") {
+  if (!profile || !profile.email || !profile.password_key) return;
+  setAuthStatus("Checking sync status...", "info");
+  const payload = { email: profile.email, apps: profile.apps, password_key: profile.password_key };
+  try {
+    const res = await masterAuthRequest("config/app", "GET", payload);
+    const remoteTimestamp = parseRemoteTimestamp(res.last_sync);
+    const localTimestamp = getLocalSyncTimestamp();
+    const remoteData = normalizeRemoteAppData(res.data);
+    const hasRemoteData = !!remoteData;
+    if (remoteTimestamp > localTimestamp && hasRemoteData) {
+      applyRemoteAppData(remoteData);
+      setLastSyncMeta({ direction: "download", timestamp: Date.now(), serverTimestamp: res.last_sync || null });
+      setAuthStatus("Downloaded newer data from cloud.", "success");
+      return;
+    }
+    const appData = collectAppDataForUpload();
+    if (!Object.keys(appData).length) {
+      if (hasRemoteData) {
+        applyRemoteAppData(remoteData);
+        setLastSyncMeta({ direction: "download", timestamp: Date.now(), serverTimestamp: res.last_sync || null });
+          updateAuthUI();
+        setAuthStatus("Imported dashboard data from cloud.", "success");
+      } else {
+        setAuthStatus("Cloud has no data yet. Add keys locally to create the first backup.", "info");
+      }
+          updateAuthUI();
+      return;
+    }
+    const shouldUpload = !remoteTimestamp || localTimestamp > remoteTimestamp || !hasRemoteData;
+    if (shouldUpload) {
+      await masterAuthRequest("config/app", "POST", { ...payload, app_data: appData });
+      const serverTimestamp = new Date().toISOString();
+      setLastSyncMeta({ direction: "upload", timestamp: Date.now(), serverTimestamp });
+      setAuthStatus("Uploaded local dashboard data to cloud.", "success");
+    } else {
+      setAuthStatus("Cloud data already up to date.", "info");
+      }
+  } catch (err) {
+    const prefix = reason === "login" ? "Auto-sync failed" : "Sync failed";
+    setAuthStatus(`${prefix}: ${err.message}`, "error");
+  }
+}
+
+async function attemptAutoSyncFromCookie() {
+  const profile = getMasterAuthProfile();
+  const passwordKey = getPasswordKeyCookie();
+  if (!profile || !profile.email) {
+    setAuthStatus("Connect with MasterAuth to enable automatic backups.", "info");
+    updateAuthUI();
+    return;
+  }
+  if (!passwordKey) {
+    setAuthStatus("Login to refresh your password key before syncing.", "warning");
+    updateAuthUI();
+    return;
+  }
+  const normalized = { ...profile, apps: profile.apps || getDefaultAppIdentifier(), password_key: passwordKey };
+  saveMasterAuthProfile(normalized);
+  updateAuthFormFromProfile();
+  try {
+    await synchronizeWithCloud(normalized, "cookie");
+    updateAuthLastSyncLabel();
+  } catch (err) {
+    setAuthStatus(`Auto-sync failed: ${err.message}`, "error");
+  } finally {
+    updateAuthUI();
   }
 }
 
@@ -800,43 +1098,24 @@ function initEvents() {
     });
   }
 
-  // Information modal events
-  const openInfo = () => { if (els.infoModal) els.infoModal.classList.remove("hidden"); };
-  const closeInfo = () => { if (els.infoModal) els.infoModal.classList.add("hidden"); };
-  if (els.openInfoModal && els.infoModal) {
-    els.openInfoModal.addEventListener("click", openInfo);
-  }
-  if (els.closeInfoModal) {
-    els.closeInfoModal.addEventListener("click", closeInfo);
-  }
-  if (els.dismissInfoModal) {
-    els.dismissInfoModal.addEventListener("click", closeInfo);
-  }
-  if (els.infoModal) {
-    els.infoModal.addEventListener("click", (e) => {
-      if (e.target === els.infoModal) closeInfo();
+  // MasterAuth events
+  if (els.authRegister) {
+    els.authRegister.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthRegister();
     });
   }
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && els.infoModal && !els.infoModal.classList.contains("hidden")) {
+  if (els.authLogin) {
+    els.authLogin.addEventListener("click", (e) => {
       e.preventDefault();
-      if (els.closeInfoModal) els.closeInfoModal.click(); else els.infoModal.classList.add("hidden");
-    }
-  });
-
-  // Expose for init to open on load
-  initEvents.openInfo = openInfo;
-
-  // Vendor change: toggle Grok Team ID field
-  if (els.vendor) {
-    const onVendorChange = () => {
-      const v = els.vendor.value;
-      const showTeam = v === "grok";
-      if (els.teamIdRow) els.teamIdRow.classList.toggle("hidden", !showTeam);
-    };
-    els.vendor.addEventListener("change", onVendorChange);
-    // Initialize visibility
-    onVendorChange();
+      handleMasterAuthLogin();
+    });
+  }
+  if (els.authLogout) {
+    els.authLogout.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthLogout();
+    });
   }
 }
 
@@ -844,12 +1123,11 @@ function init() {
   render();
   initEvents();
   updateRangeLabel();
-  // Show information modal on every visit
-  if (typeof initEvents.openInfo === "function") {
-    initEvents.openInfo();
-  } else if (els.infoModal) {
-    els.infoModal.classList.remove("hidden");
-  }
+  // MasterAuth initial UI state
+  updateAuthFormFromProfile();
+  updateAuthLastSyncLabel();
+  updateAuthUI();
+  attemptAutoSyncFromCookie();
 }
 
 document.addEventListener("DOMContentLoaded", init);

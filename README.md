@@ -12,6 +12,7 @@ Start with OpenAI usage (organization costs), Deepseek balance, and Grok (xAI) p
 - Private by design: Data saved in `localStorage`; nothing sent to third‑party servers.
 - CORS proxy support: Optional proxy base to bypass browser CORS restrictions.
 - Fast + responsive UI: Tailwind CSS + vanilla JS; optimized for mobile.
+- MasterAuth sync: (Optional) register/login to securely sync your local data via the provided webhook API, with automatic download/upload after login.
 
 ## How It Works
 
@@ -76,6 +77,20 @@ You can also use any static server you prefer (e.g., `npx serve`, VS Code Live S
 3. For OpenAI, pick a usage range with the calendar button (Today/3d/7d/1m). Deepseek ignores the range and shows current available balance.
 4. Click “Refresh All” to fetch and display totals.
 5. Keys and labels are stored only in your browser; use “Clear All Keys” to remove.
+
+## MasterAuth Backup & Sync
+
+Use the credentials shared in `masterAuth-WebbyCMS.md` to keep your dashboard data backed up:
+
+1. Open the **MasterAuth Sync** card at the top of the page.
+2. Enter your email, password, and (hidden) app identifier – it auto-fills with the current domain, falling back to `post-man-test`.
+3. Click **Register** if you’re new; otherwise click **Login**. On success we store the returned `password_key` in a secure cookie.
+4. After login (and whenever you revisit with that cookie present) the app automatically compares the cloud `last_sync` timestamp with your local one:
+  - If the cloud data is newer, it downloads and replaces the local snapshot.
+  - If your local data is newer or the cloud is empty, it immediately uploads your latest `localStorage` data as `app_data`.
+5. No manual sync buttons are needed—just login once on each device and let the app keep everything aligned.
+
+> Tip: Login is still required whenever the password key cookie expires or is cleared so the app can refresh its credentials.
 
 ## Providers
 
