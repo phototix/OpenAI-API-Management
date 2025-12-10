@@ -78,6 +78,12 @@
                             <span class="text-sm">Logged in as <strong id="authLoggedInEmail" class="font-semibold"></strong></span>
                         </div>
                         <div class="flex items-center gap-2">
+                            <button id="authDownload" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center">
+                                <i class="fas fa-download mr-2"></i> Download
+                            </button>
+                            <button id="authUpload" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center">
+                                <i class="fas fa-upload mr-2"></i> Upload
+                            </button>
                             <button id="authLogout" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center">
                                 <i class="fas fa-sign-out-alt mr-2"></i> Logout
                             </button>
@@ -111,10 +117,10 @@
                     </div>
                 </div>
                 <div id="authStatusMessage" class="mt-4 text-sm text-gray-600">
-                    Login once to trigger automatic cloud backups.
+                    Use Download to restore or Upload to back up.
                 </div>
                 <p class="mt-3 text-xs text-gray-500">
-                    Data is stored in encrypted form on MasterAuth using your unique <code>password_key</code>. We store that key in a secure cookie so the app can auto-sync (download/upload) immediately after you login or revisit this page.
+                    Data is stored in encrypted form on MasterAuth using your unique <code>password_key</code>. There is no automatic sync — you choose when to Upload (save to cloud) or Download (replace local data).
                 </p>
             </section>
 

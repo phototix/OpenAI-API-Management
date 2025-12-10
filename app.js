@@ -58,6 +58,8 @@ const els = {
   authCredentialsSection: document.getElementById("authCredentialsSection"),
   authLoggedInEmail: document.getElementById("authLoggedInEmail"),
   authLogout: document.getElementById("authLogout"),
+  authUpload: document.getElementById("authUpload"),
+  authDownload: document.getElementById("authDownload"),
 };
 
 function getDefaultAppIdentifier() {
@@ -503,8 +505,7 @@ async function handleMasterAuthLogin() {
       const profile = { email, apps, password_key: passwordKey, session: res.session || null };
       saveMasterAuthProfile(profile);
       updateAuthFormFromProfile();
-      setAuthStatus("Login successful. Syncing dashboard data...", "info");
-      await synchronizeWithCloud(profile, "login");
+      setAuthStatus("Login successful.", "success");
       updateAuthLastSyncLabel();
       updateAuthUI();
     } else {
@@ -536,54 +537,11 @@ function stableStringify(obj) {
 }
 
 async function handleMasterAuthLogout() {
-  // Best-effort sync on logout if data changed
   const profile = getMasterAuthProfile();
-  const passwordKey = getPasswordKeyCookie();
-  if (!profile || !profile.email || !passwordKey) {
-    // Nothing to do, just clear any cookie and reset UI
-    clearPasswordKeyCookie();
-    saveMasterAuthProfile({ email: (profile && profile.email) || "", apps: getDefaultAppIdentifier(), password_key: null, session: null });
-    updateAuthUI();
-    setAuthStatus("Logged out.", "success");
-    return;
-  }
-
-  setAuthBusy(true);
-  try {
-    const payload = { email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: passwordKey };
-    let remoteData = null;
-    try {
-      const res = await masterAuthRequest("config/app", "GET", payload);
-      remoteData = normalizeRemoteAppData(res.data);
-    } catch (e) {
-      // ignore fetch error here; we'll still try to upload if needed
-      remoteData = null;
-    }
-
-    const localData = collectAppDataForUpload();
-    const localStr = stableStringify(localData);
-    const remoteStr = stableStringify(remoteData || {});
-    const changed = localStr !== remoteStr;
-
-    if (changed) {
-      try {
-        await masterAuthRequest("config/app", "POST", { ...payload, app_data: localData });
-        setLastSyncMeta({ direction: "upload", timestamp: Date.now(), serverTimestamp: new Date().toISOString() });
-        setAuthStatus("Changes saved to cloud. Logged out.", "success");
-        showToast("Synced just now", "success", 2200);
-      } catch (err) {
-        setAuthStatus(`Logout: failed to upload changes (${err.message}). Logged out locally.`, "warning");
-      }
-    } else {
-      setAuthStatus("No changes detected. Logged out.", "success");
-    }
-  } finally {
-    // Clear credentials regardless of upload result
-    clearPasswordKeyCookie();
-    saveMasterAuthProfile({ email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: null, session: null });
-    updateAuthUI();
-    setAuthBusy(false);
-  }
+  clearPasswordKeyCookie();
+  saveMasterAuthProfile({ email: (profile && profile.email) || "", apps: getDefaultAppIdentifier(), password_key: null, session: null });
+  updateAuthUI();
+  setAuthStatus("Logged out.", "success");
 }
 
 function parseRemoteTimestamp(value) {
@@ -641,6 +599,59 @@ async function synchronizeWithCloud(profile, reason = "auto") {
   } catch (err) {
     const prefix = reason === "login" ? "Auto-sync failed" : "Sync failed";
     setAuthStatus(`${prefix}: ${err.message}`, "error");
+  }
+}
+
+// Manual Upload/Download handlers
+async function handleMasterAuthUpload() {
+  const profile = getMasterAuthProfile();
+  const passwordKey = getPasswordKeyCookie();
+  if (!profile || !profile.email || !passwordKey) {
+    setAuthStatus("Login required before uploading.", "warning");
+    return;
+  }
+  const confirmed = confirm("Upload will send your local API configs to the cloud server. This may expose API keys to the backup service. Proceed?");
+  if (!confirmed) return;
+  setAuthBusy(true);
+  try {
+    const appData = collectAppDataForUpload();
+    const payload = { email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: passwordKey, app_data: appData };
+    await masterAuthRequest("config/app", "POST", payload);
+    setLastSyncMeta({ direction: "upload", timestamp: Date.now(), serverTimestamp: new Date().toISOString() });
+    setAuthStatus("Uploaded local data to cloud.", "success");
+    showToast("Upload completed", "success", 2200);
+  } catch (err) {
+    setAuthStatus(`Upload failed: ${err.message}`, "error");
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+async function handleMasterAuthDownload() {
+  const profile = getMasterAuthProfile();
+  const passwordKey = getPasswordKeyCookie();
+  if (!profile || !profile.email || !passwordKey) {
+    setAuthStatus("Login required before downloading.", "warning");
+    return;
+  }
+  const confirmed = confirm("Download will replace all local configs with the cloud version. Proceed?");
+  if (!confirmed) return;
+  setAuthBusy(true);
+  try {
+    const res = await masterAuthRequest("config/app", "GET", { email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: passwordKey });
+    const remoteData = normalizeRemoteAppData(res.data);
+    if (remoteData) {
+      applyRemoteAppData(remoteData);
+      setLastSyncMeta({ direction: "download", timestamp: Date.now(), serverTimestamp: res.last_sync || null });
+      setAuthStatus("Downloaded and applied cloud data.", "success");
+      showToast("Download completed", "success", 2200);
+    } else {
+      setAuthStatus("No cloud data found to download.", "info");
+    }
+  } catch (err) {
+    setAuthStatus(`Download failed: ${err.message}`, "error");
+  } finally {
+    setAuthBusy(false);
   }
 }
 
@@ -1229,6 +1240,18 @@ function initEvents() {
       handleMasterAuthLogout();
     });
   }
+  if (els.authUpload) {
+    els.authUpload.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthUpload();
+    });
+  }
+  if (els.authDownload) {
+    els.authDownload.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthDownload();
+    });
+  }
 }
 
 function init() {
@@ -1239,7 +1262,7 @@ function init() {
   updateAuthFormFromProfile();
   updateAuthLastSyncLabel();
   updateAuthUI();
-  attemptAutoSyncFromCookie();
+  // Auto-sync disabled; use Upload/Download buttons instead
 }
 
 document.addEventListener("DOMContentLoaded", init);
