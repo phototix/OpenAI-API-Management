@@ -997,7 +997,7 @@ async function fetchAnthropicUsageRange(adminKey, range = getRangeSetting()) {
   const endISO = toISOStartOfDayUTC(addDaysStr(endStr, 1));
   const host = "https://api.anthropic.com";
   const path = `/v1/organizations/usage_report/messages?starting_at=${encodeURIComponent(startISO)}&ending_at=${encodeURIComponent(endISO)}&bucket_width=1d`;
-  const url = buildProxiedUrl(host, path);
+  const url = host.replace(/\/$/, "") + path;
   const res = await fetchWithTimeout(
     url,
     {
@@ -1052,7 +1052,7 @@ async function fetchAnthropicUsageRange(adminKey, range = getRangeSetting()) {
 // Deepseek: simple balance endpoint. Returns available credit/balance.
 async function fetchDeepseekBalance(token) {
   const host = "https://api.deepseek.com";
-  const url = buildProxiedUrl(host, "/user/balance");
+  const url = host.replace(/\/$/, "") + "/user/balance";
   const res = await fetchWithTimeout(
     url,
     {
