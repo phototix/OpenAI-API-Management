@@ -1,5 +1,5 @@
 const STORAGE_KEY = "openai_accounts_v1";
-const CORS_PROXY_KEY = "openai_cors_proxy";
+const CORS_PROXY_KEY = "cors_proxy";
 const RANGE_KEY = "openai_usage_range"; // '1d' | '7d' | '1m' | '3m'
 const MASTER_AUTH_BASE = "https://n8n.brandon.my/webhook/v1/api";
 const MASTER_AUTH_PROFILE_KEY = "masterauth_profile_v1";
@@ -696,6 +696,20 @@ function getProxyBase() {
   return v.replace(/\/$/, "");
 }
 
+function migrateProxyKey() {
+  try {
+    const oldKey = "openai_cors_proxy";
+    const newKey = CORS_PROXY_KEY;
+    if (!localStorage.getItem(newKey)) {
+      const oldVal = localStorage.getItem(oldKey);
+      if (oldVal) {
+        localStorage.setItem(newKey, oldVal);
+        localStorage.removeItem(oldKey);
+      }
+    }
+  } catch {}
+}
+
 // Build a URL that optionally routes via a CORS proxy.
 // Supported proxy base formats:
 //  - Base containing "{url}" placeholder: e.g. https://your-proxy.example.com?url={url}
@@ -1206,7 +1220,7 @@ async function fetchGooglePricingBalance(apiKey, billingAccountId) {
       throw new Error(`Pricing API HTTP ${res.status}${text ? `: ${text.slice(0, 120)}` : ""}`);
     }
   } catch (err) {
-    const corsHint = String(err && err.message || "").includes("Failed to fetch") ? " • CORS blocked: set a proxy in localStorage key 'openai_cors_proxy'" : "";
+    const corsHint = String(err && err.message || "").includes("Failed to fetch") ? " • CORS blocked: set a proxy in localStorage key 'cors_proxy'" : "";
     throw new Error(`Google Pricing API check failed: ${err.message}${corsHint}`);
   }
 
@@ -1241,7 +1255,7 @@ async function refreshOne(id, showModal) {
     updateAccount(id, { balance: bal, lastUpdated: Date.now(), error: null });
   } catch (e) {
     let errMsg = String(e && e.message ? e.message : e);
-    const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'openai_cors_proxy'" : "";
+    const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'cors_proxy'" : "";
     if ((acct.vendor || "openai") === "grok") {
       const ip = await fetchPublicIP();
       if (ip) errMsg += ` • Public IP: ${ip} (whitelist for Grok)`;
@@ -1277,7 +1291,7 @@ async function refreshAllSequential() {
       updateAccount(a.id, { balance: bal, lastUpdated: Date.now(), error: null });
     } catch (e) {
       let errMsg = String(e && e.message ? e.message : e);
-      const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'openai_cors_proxy'" : "";
+      const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'cors_proxy'" : "";
       if ((a.vendor || "openai") === "grok") {
         const ip = await fetchPublicIP();
         if (ip) errMsg += ` • Public IP: ${ip} (whitelist for Grok)`;
@@ -1440,6 +1454,7 @@ function initEvents() {
 }
 
 function init() {
+  migrateProxyKey();
   render();
   initEvents();
   updateRangeLabel();

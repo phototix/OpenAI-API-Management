@@ -117,7 +117,7 @@ Some providers may not send CORS headers for all origins. If you see “Failed t
 - App setting (stored in your browser `localStorage`):
 
 ```js
-localStorage.setItem('openai_cors_proxy', 'https://your-proxy.example');
+localStorage.setItem('cors_proxy', 'https://your-proxy.example');
 ```
 
 The app will prepend this base to provider URLs. Your proxy should:
@@ -155,7 +155,7 @@ Security note: Never use public/unknown proxies with secrets. Run your own (Clou
 ## Configuration (Local Storage Keys)
 
 - `openai_accounts_v1`: Array of saved accounts `{ id, name, vendor, adminKey, lastUpdated, balance, error }`.
-- `openai_cors_proxy`: Optional base URL to a CORS‑enabled reverse proxy.
+- `cors_proxy`: Optional base URL to a CORS‑enabled reverse proxy.
 - `openai_usage_range`: One of `1d`, `3d`, `7d`, `1m`.
 - `openai_sync_base`: Optional base URL for manual Upload/Download (e.g., `https://your-server.example`). The app will call `GET {base}/download` and `POST {base}/upload` only when you click the buttons and confirm.
 
@@ -194,7 +194,7 @@ OpenAI-API-Management/
 
 ## Troubleshooting
 
-- "Failed to fetch" / CORS: Configure `openai_cors_proxy` as described above.
+- "Failed to fetch" / CORS: Configure `cors_proxy` as described above.
 - 401/403 errors: Verify the Admin Key is valid and you have org permissions.
 - Empty totals: Ensure the selected date range actually includes usage.
 - Browser storage: Clearing site data will remove saved accounts.
