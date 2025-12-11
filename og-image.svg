@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!-- Gradient Background -->
+  <defs>
+    <linearGradient id="gradientBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#gradientBg)"/>
+  
+  <!-- Decorative Elements -->
+  <circle cx="100" cy="100" r="80" fill="rgba(255,255,255,0.1)"/>
+  <circle cx="1100" cy="530" r="100" fill="rgba(255,255,255,0.1)"/>
+  
+  <!-- Main Headline -->
+  <text x="600" y="140" font-size="72" font-weight="bold" text-anchor="middle" fill="white" font-family="Arial, sans-serif">
+    API Key Dashboard
+  </text>
+  
+  <!-- Subheading -->
+  <text x="600" y="220" font-size="36" text-anchor="middle" fill="rgba(255,255,255,0.95)" font-family="Arial, sans-serif">
+    Monitor & Track API Balances Across Providers
+  </text>
+  
+  <!-- Features List -->
+  <g font-size="24" fill="rgba(255,255,255,0.9)" font-family="Arial, sans-serif">
+    <text x="150" y="330">✓ OpenAI</text>
+    <text x="150" y="380">✓ Anthropic Claude</text>
+    <text x="150" y="430">✓ DeepSeek</text>
+    
+    <text x="650" y="330">✓ xAI Grok</text>
+    <text x="650" y="380">✓ Google AI Studio</text>
+    <text x="650" y="430">✓ 100% Free</text>
+  </g>
+  
+  <!-- CTA Button -->
+  <rect x="350" y="500" width="500" height="80" rx="15" fill="rgba(255,255,255,0.95)"/>
+  <text x="600" y="555" font-size="48" font-weight="bold" text-anchor="middle" fill="#667eea" font-family="Arial, sans-serif">
+    Start Monitoring Now →
+  </text>
+</svg>
