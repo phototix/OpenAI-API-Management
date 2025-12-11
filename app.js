@@ -290,9 +290,11 @@ function accountCardHTML(a) {
   const err = a.error ? String(a.error) : "";
 
   const secretForLabel = a.adminKey || "";
-  const vendorName = vendor === "openai" ? "OpenAI" : vendor === "deepseek" ? "Deepseek" : vendor === "grok" ? "Grok" : vendor === "google" ? "Google AI Studio" : (vendor || "").toUpperCase();
+  const vendorName = vendor === "openai" ? "OpenAI" : vendor === "anthropic" ? "Anthropic" : vendor === "deepseek" ? "Deepseek" : vendor === "grok" ? "Grok" : vendor === "google" ? "Google AI Studio" : (vendor || "").toUpperCase();
   const vendorBadgeClass = vendor === "openai"
     ? "bg-purple-100 text-purple-800"
+    : vendor === "anthropic"
+    ? "bg-emerald-100 text-emerald-800"
     : vendor === "deepseek"
     ? "bg-teal-100 text-teal-800"
     : vendor === "grok"
@@ -322,7 +324,7 @@ function accountCardHTML(a) {
       </div>
 
       <div class="mt-4 grid grid-cols-1 gap-3">
-        ${vendor === "openai" ? `
+        ${vendor === "openai" || vendor === "anthropic" ? `
           <div class="bg-gray-50 rounded-lg p-4 text-center">
             <div class="text-xs text-gray-500">Used (range)</div>
             <div class="text-xl font-semibold text-gray-800">${hasUsed ? formatUSD(used) : "—"}</div>
@@ -934,6 +936,120 @@ async function fetchUsageRangeWithAdminKey(adminKey, range = getRangeSetting()) 
   }
 }
 
+// Anthropic: organization usage report (messages) summed across range
+function toISOStartOfDayUTC(dateStr) {
+  return `${dateStr}T00:00:00Z`;
+}
+
+function numberFrom(obj, keys, divisorIfCents = null) {
+  if (!obj || typeof obj !== "object") return null;
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "number" && Number.isFinite(v)) return divisorIfCents ? v / divisorIfCents : v;
+    if (typeof v === "string") {
+      const n = Number(v.replace(/[,_\s]/g, ""));
+      if (!Number.isNaN(n)) return divisorIfCents ? n / divisorIfCents : n;
+    }
+  }
+  return null;
+}
+
+function extractUsdValue(obj) {
+  if (obj == null) return null;
+  if (typeof obj === "number" && Number.isFinite(obj)) return obj;
+  if (typeof obj === "string") {
+    const n = Number(obj.replace(/[,_\s]/g, ""));
+    return Number.isNaN(n) ? null : n;
+  }
+  if (obj && typeof obj === "object") {
+    if (obj.amount && typeof obj.amount === "object") {
+      const cur = (obj.amount.currency || obj.amount.curr || obj.currency || "").toUpperCase?.() || "";
+      const val = typeof obj.amount.value === "number" ? obj.amount.value : (typeof obj.amount.val === "number" ? obj.amount.val : null);
+      if (cur === "USD" && typeof val === "number") return val;
+      // amounts sometimes in cents
+      const cents = numberFrom(obj.amount, ["cents", "amount_cents", "value_cents", "val_cents"], 100);
+      if (cur === "USD" && cents != null) return cents;
+    }
+    const direct = numberFrom(obj, [
+      "usd",
+      "cost_usd",
+      "total_usd",
+      "total_cost_usd",
+      "amount_usd",
+      "spend_usd",
+      "charges_usd",
+      "usage_usd",
+      "cost",
+      "total_cost",
+      "amount",
+    ]);
+    if (direct != null) return direct;
+    const cents = numberFrom(obj, ["amount_cents", "cost_cents", "total_cost_cents"], 100);
+    if (cents != null) return cents;
+  }
+  return null;
+}
+
+async function fetchAnthropicUsageRange(adminKey, range = getRangeSetting()) {
+  const { startStr, endStr } = computeRangeDates(range);
+  const startISO = toISOStartOfDayUTC(startStr);
+  // ending_at exclusive: next day 00:00Z
+  const endISO = toISOStartOfDayUTC(addDaysStr(endStr, 1));
+  const host = "https://api.anthropic.com";
+  const path = `/v1/organizations/usage_report/messages?starting_at=${encodeURIComponent(startISO)}&ending_at=${encodeURIComponent(endISO)}&bucket_width=1d`;
+  const url = buildProxiedUrl(host, path);
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "GET",
+      headers: {
+        "anthropic-version": "2023-06-01",
+        "x-api-key": adminKey,
+        Accept: "application/json",
+      },
+      mode: "cors",
+    },
+    20000
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    try { console.error("[Anthropic] usage_report error", { status: res.status, body: text }); } catch {}
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  try { console.log("[Anthropic] /v1/organizations/usage_report/messages payload", data); } catch {}
+
+  let totalUsd = 0;
+  let found = false;
+
+  // Prefer bucketed totals
+  if (data && Array.isArray(data.buckets)) {
+    for (const b of data.buckets) {
+      const v = extractUsdValue(b?.total) ?? extractUsdValue(b);
+      if (v != null) { totalUsd += Number(v || 0); found = true; }
+    }
+  }
+
+  // Try totals at top level
+  if (!found && data && typeof data === "object") {
+    const v = extractUsdValue(data.total) ?? extractUsdValue(data.summary) ?? extractUsdValue(data);
+    if (v != null) { totalUsd += Number(v || 0); found = true; }
+  }
+
+  // Some APIs return data array
+  if (!found && Array.isArray(data?.data)) {
+    for (const row of data.data) {
+      const v = extractUsdValue(row?.total) ?? extractUsdValue(row);
+      if (v != null) { totalUsd += Number(v || 0); found = true; }
+    }
+  }
+
+  if (!found) {
+    try { console.warn("[Anthropic] Could not locate USD fields in response."); } catch {}
+  }
+  return { granted: null, used: totalUsd, available: null };
+}
+
 // Deepseek: simple balance endpoint. Returns available credit/balance.
 async function fetchDeepseekBalance(token) {
   const host = "https://api.deepseek.com";
@@ -1116,6 +1232,8 @@ async function refreshOne(id, showModal) {
         bal = await fetchGrokPrepaidBalance(acct.adminKey, acct.teamId);
       } else if (vendor === "google") {
         bal = await fetchGooglePricingBalance(acct.adminKey, acct.billingAccountId);
+      } else if (vendor === "anthropic") {
+        bal = await fetchAnthropicUsageRange(acct.adminKey);
       } else {
         bal = await fetchUsageRangeWithAdminKey(acct.adminKey);
       }
@@ -1152,6 +1270,8 @@ async function refreshAllSequential() {
           bal = await fetchGrokPrepaidBalance(a.adminKey, a.teamId);
         } else if (vendor === "google") {
           bal = await fetchGooglePricingBalance(a.adminKey, a.billingAccountId);
+        } else if (vendor === "anthropic") {
+          bal = await fetchAnthropicUsageRange(a.adminKey);
         } else {
           bal = await fetchUsageRangeWithAdminKey(a.adminKey);
         }

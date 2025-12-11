@@ -198,7 +198,7 @@
     <div id="rangeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
         <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-800">Select Usage Range (OpenAI)</h3>
+                <h3 class="text-lg font-semibold text-gray-800">Select Usage Range</h3>
                 <button id="closeRangeModal" class="text-gray-500 hover:text-gray-700"><i class="fas fa-times"></i></button>
             </div>
             <p class="text-sm text-gray-600 mb-4">Choose how much history to fetch from billing usage.</p>
@@ -240,6 +240,7 @@
                     <label for="vendorSelect" class="block text-sm font-medium text-gray-700 mb-1">Provider</label>
                     <select id="vendorSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                         <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic (Claude)</option>
                         <option value="deepseek">Deepseek</option>
                         <option value="grok">Grok (xAI)</option>
                                                 <option value="google">Google AI Studio (GDC Billing)</option>
@@ -260,7 +261,7 @@
                 <div>
                     <label for="adminKey" class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
                     <input type="password" id="adminKey" placeholder="Paste your API key for the selected provider" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent api-key-input" required>
-                                        <p class="text-xs text-gray-500 mt-1">OpenAI: uses <code>/v1/organization/costs</code> with start_time/end_time. Deepseek: uses <code>GET https://api.deepseek.com/user/balance</code>. Grok (xAI): uses <code>GET https://management-api.x.ai/v1/billing/teams/{team_id}/prepaid/balance</code>. Google AI Studio (GDC Billing): consults <code>Cloud Billing Pricing API</code> for SKU pricing. Note: Pricing API does not expose per-account credit balances.</p>
+                                        <p class="text-xs text-gray-500 mt-1">OpenAI: uses <code>/v1/organization/costs</code> with start_time/end_time. Anthropic: uses <code>GET https://api.anthropic.com/v1/organizations/usage_report/messages</code> with <code>starting_at</code>/<code>ending_at</code>. Deepseek: uses <code>GET https://api.deepseek.com/user/balance</code>. Grok (xAI): uses <code>GET https://management-api.x.ai/v1/billing/teams/{team_id}/prepaid/balance</code>. Google AI Studio (GDC Billing): consults <code>Cloud Billing Pricing API</code> for SKU pricing. Note: Pricing API does not expose per-account credit balances.</p>
                 </div>
                 <div class="flex justify-end space-x-2">
                     <button type="button" id="cancelAddKey" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Cancel</button>
@@ -289,19 +290,69 @@
             });
         </script>
     <script src="app.js?version=1.8"></script>
+
+    <!-- Open AI Notes -->
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+        <section class="bg-white rounded-2xl shadow p-5">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">OpenAI API Notes</h3>
+            <ul class="text-sm text-gray-700 list-disc pl-5 space-y-2">
+                <li>Ensure your API key has access to the <strong>/v1/organization/costs</strong> endpoint.</li>
+                <li>Usage data is fetched based on the selected date range (1 day, 3 days, 7 days, or 1 month).</li>
+                <li>OpenAI may have rate limits; avoid excessive refreshes to prevent temporary blocks.</li>
+                <li>Reference: OpenAI API Documentation for Organization Costs endpoint.</li>
+            </ul>
+        </section>
+    </div>
+
+    <!-- DeepSeek AI Notes -->
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+        <section class="bg-white rounded-2xl shadow p-5">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">DeepSeek AI API Notes</h3>
+            <ul class="text-sm text-gray-700 list-disc pl-5 space-y-2">
+                <li>Ensure your API key has access to the <strong>GET /user/balance</strong> endpoint.</li>
+                <li>DeepSeek provides a straightforward balance retrieval without date range parameters.</li>
+                <li>Reference: DeepSeek API Documentation for User Balance endpoint.</li>
+            </ul>
+        </section>
+    </div>
+
+    <!-- xAI/Grok Notes -->
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+        <section class="bg-white rounded-2xl shadow p-5">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">xAI Grok API Notes</h3>
+            <ul class="text-sm text-gray-700 list-disc pl-5 space-y-2">
+                <li>Ensure your API key has access to the <strong>/v1/billing/teams/{team_id}/prepaid/balance</strong> endpoint.</li>
+                <li>Replace <code>{team_id}</code> in the URL with your actual Team ID associated with your Grok account.</li>
+                <li>Reference: xAI Grok Management API Documentation for Billing and Balance endpoint.</li>
+            </ul>
+        </section>
+    </div>
+
+    <!-- Google AI Studio (GDC Billing) Notes -->
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+        <section class="bg-white rounded-2xl shadow p-5">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">Google AI Studio via GDC Billing</h3>
+            <ul class="text-sm text-gray-700 list-disc pl-5 space-y-2">
+                <li>Enable the <strong>Cloud Billing Catalog API</strong> (Pricing API) in your Google Cloud project.</li>
+                <li>Create an API key or an OAuth token with access to the Pricing API. Restrict it to your project.</li>
+                <li>Find your <strong>Billing Account ID</strong> (format like <code>0123AB-456789-ABCDEF</code>) in Google Cloud Console &gt; Billing.</li>
+                <li>Limitations: The Pricing API provides SKU pricing, not your remaining credits or balance. For spend tracking, use <em>Cloud Billing export to BigQuery</em> or Budgets.</li>
+                <li>Reference: Google Cloud Billing Pricing API REST (Services and SKUs list endpoints).</li>
+            </ul>
+        </section>
+    </div>
+
+    <!-- Claude/Anthropic AI Notes -->
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+        <section class="bg-white rounded-2xl shadow p-5">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">Claude/Anthropic AI API Notes</h3>
+            <ul class="text-sm text-gray-700 list-disc pl-5 space-y-2">
+                <li>Ensure your API key has access to the <strong>GET /v1/organizations/usage_report/messages</strong> endpoint.</li>
+                <li>Usage data is fetched based on the selected date range using <code>starting_at</code> and <code>ending_at</code> parameters.</li>
+                <li>Reference: Anthropic API Documentation for Organizations Usage Report endpoint.</li>
+            </ul>
+        </section>
+    </div>
     
-        <!-- Google AI Studio (GDC Billing) Notes -->
-        <div class="container mx-auto px-4 py-6 max-w-4xl">
-            <section class="bg-white rounded-2xl shadow p-5">
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">Google AI Studio via GDC Billing</h3>
-                <ul class="text-sm text-gray-700 list-disc pl-5 space-y-2">
-                    <li>Enable the <strong>Cloud Billing Catalog API</strong> (Pricing API) in your Google Cloud project.</li>
-                    <li>Create an API key or an OAuth token with access to the Pricing API. Restrict it to your project.</li>
-                    <li>Find your <strong>Billing Account ID</strong> (format like <code>0123AB-456789-ABCDEF</code>) in Google Cloud Console &gt; Billing.</li>
-                    <li>Limitations: The Pricing API provides SKU pricing, not your remaining credits or balance. For spend tracking, use <em>Cloud Billing export to BigQuery</em> or Budgets.</li>
-                    <li>Reference: Google Cloud Billing Pricing API REST (Services and SKUs list endpoints).</li>
-                </ul>
-            </section>
-        </div>
 </body>
 </html>
