@@ -1006,8 +1006,7 @@ async function fetchAnthropicUsageRange(adminKey, range = getRangeSetting()) {
         "anthropic-version": "2023-06-01",
         "x-api-key": adminKey,
         Accept: "application/json",
-      },
-      mode: "cors",
+      }
     },
     20000
   );
@@ -1061,8 +1060,7 @@ async function fetchDeepseekBalance(token) {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
-      },
-      mode: "cors",
+      }
     },
     20000
   );
