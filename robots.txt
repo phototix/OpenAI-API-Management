@@ -1,3 +1,15 @@
 User-agent: *
 Allow: /
+# Block risky file types from crawling/indexing
+Disallow: /*.bat$
+Disallow: /*.cmd$
+Disallow: /*.exe$
+Disallow: /*.ps1$
+Disallow: /*.sh$
+Disallow: /*.pem$
+Disallow: /*.key$
+Disallow: /*.crt$
+Disallow: /*.pfx$
+Disallow: /README.md
+Disallow: /masterAuth-WebbyCMS.md
 Sitemap: https://api-keys.brandon.my/sitemap.xml

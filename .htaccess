@@ -1,0 +1,12 @@
+# Security hardening
+Options -Indexes
+
+# Deny access to risky and sensitive files
+<FilesMatch "\.(bat|cmd|exe|ps1|sh|pem|key|crt|pfx)$">
+  Require all denied
+</FilesMatch>
+
+# Reduce SEO footprint on non-content files
+<FilesMatch "\.(md|txt)$">
+  Header set X-Robots-Tag "noindex, nofollow"
+</FilesMatch>

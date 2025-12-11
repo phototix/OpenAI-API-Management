@@ -1,3 +1,4 @@
 @echo off
-echo Starting HTTPS Server
-"C:\node\node.exe" "C:\node\node_modules\http-server\bin\http-server" -S -C localhost.pem -K localhost-key.pem
+echo This helper script is not intended for distribution or download.
+echo Please run local servers via your own environment.
+pause
