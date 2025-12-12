@@ -1,7 +1,7 @@
 const STORAGE_KEY = "openai_accounts_v1";
 const CORS_PROXY_KEY = "openai_cors_proxy";
 const RANGE_KEY = "openai_usage_range"; // '1d' | '7d' | '1m' | '3m'
-const MASTER_AUTH_BASE = "https://n8n.brandon.my/webhook/v1/api";
+const MASTER_AUTH_BASE = "https://api.brandon.my/v1/api";
 const MASTER_AUTH_PROFILE_KEY = "masterauth_profile_v1";
 const MASTER_AUTH_LAST_SYNC_KEY = "masterauth_last_sync_v1";
 const MASTER_AUTH_RESERVED_KEYS = new Set([MASTER_AUTH_PROFILE_KEY, MASTER_AUTH_LAST_SYNC_KEY]);
