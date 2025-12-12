@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy • API Key Dashboard</title>
+  <meta name="description" content="Privacy practices for API Key Dashboard: local storage by default, optional encrypted cloud backup, and provider-only API calls.">
+  <link rel="canonical" href="https://api-keys.brandon.my/privacy.html">
+  <meta name="robots" content="index,follow">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="container mx-auto px-4 py-8 max-w-3xl">
+    <h1 class="text-3xl font-bold mb-4">Privacy</h1>
+    <p class="text-gray-700 mb-6">API Key Dashboard respects your privacy and is designed to keep sensitive data on your device by default.</p>
+
+    <h2 class="text-xl font-semibold mt-6 mb-2">Data Storage</h2>
+    <ul class="list-disc pl-6 text-gray-700 space-y-2">
+      <li><strong>Local by default:</strong> Your accounts and API keys are stored in your browser's local storage.</li>
+      <li><strong>No automatic sync:</strong> Nothing is sent to any server unless you explicitly use the optional backup feature.</li>
+    </ul>
+
+    <h2 class="text-xl font-semibold mt-6 mb-2">Optional Cloud Backup</h2>
+    <p class="text-gray-700">You may opt to back up your local data via MasterAuth hosted at <code>n8n.brandon.my</code>. When you press Upload, your local data (including API keys) is encrypted with a password-derived key and sent to the backup service. Download replaces local data with your cloud backup.</p>
+
+    <h2 class="text-xl font-semibold mt-6 mb-2">Network Calls</h2>
+    <ul class="list-disc pl-6 text-gray-700 space-y-2">
+      <li><strong>Direct provider APIs:</strong> The app calls provider endpoints (OpenAI, Anthropic, DeepSeek, xAI Grok, Google Billing) only when you choose to refresh balances.</li>
+      <li><strong>No tracking pixels:</strong> No analytics or ad trackers are embedded.</li>
+    </ul>
+
+    <h2 class="text-xl font-semibold mt-6 mb-2">Affiliation</h2>
+    <p class="text-gray-700">This project is independent and not affiliated with OpenAI, Anthropic, xAI, Google, or DeepSeek.</p>
+
+    <p class="mt-8"><a href="/" class="text-blue-600 underline"><i class="fa fa-arrow-left mr-1"></i>Back to app</a></p>
+  </div>
+</body>
+</html>

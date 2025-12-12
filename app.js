@@ -1,5 +1,5 @@
 const STORAGE_KEY = "openai_accounts_v1";
-const CORS_PROXY_KEY = "openai_cors_proxy";
+const CORS_PROXY_KEY = "cors_proxy";
 const RANGE_KEY = "openai_usage_range"; // '1d' | '7d' | '1m' | '3m'
 const MASTER_AUTH_BASE = "https://api.brandon.my/v1/api";
 const MASTER_AUTH_PROFILE_KEY = "masterauth_profile_v1";
@@ -31,6 +31,8 @@ const els = {
   adminKey: document.getElementById("adminKey"),
   teamId: document.getElementById("teamId"),
   teamIdRow: document.getElementById("teamIdRow"),
+  gdcBillingAccountId: document.getElementById("gdcBillingAccountId"),
+  gdcBillingAccountRow: document.getElementById("gdcBillingAccountRow"),
   addKeyModal: document.getElementById("addKeyModal"),
   openAddKeyModal: document.getElementById("openAddKeyModal"),
   closeAddKeyModal: document.getElementById("closeAddKeyModal"),
@@ -58,6 +60,8 @@ const els = {
   authCredentialsSection: document.getElementById("authCredentialsSection"),
   authLoggedInEmail: document.getElementById("authLoggedInEmail"),
   authLogout: document.getElementById("authLogout"),
+  authUpload: document.getElementById("authUpload"),
+  authDownload: document.getElementById("authDownload"),
 };
 
 function getDefaultAppIdentifier() {
@@ -236,6 +240,7 @@ function addAccount(name, adminKey, vendor = "openai", extra = {}) {
   const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
   const account = { id, name, vendor: vendor || "openai", adminKey: adminKey || "", lastUpdated: null, balance: null, error: null };
   if (vendor === "grok" && extra && extra.teamId) account.teamId = extra.teamId;
+  if (vendor === "google" && extra && extra.billingAccountId) account.billingAccountId = extra.billingAccountId;
   list.push(account);
   saveAccounts(list);
   return id;
@@ -285,19 +290,25 @@ function accountCardHTML(a) {
   const err = a.error ? String(a.error) : "";
 
   const secretForLabel = a.adminKey || "";
-  const vendorName = vendor === "openai" ? "OpenAI" : vendor === "deepseek" ? "Deepseek" : vendor === "grok" ? "Grok" : (vendor || "").toUpperCase();
+  const vendorName = vendor === "openai" ? "OpenAI" : vendor === "anthropic" ? "Anthropic" : vendor === "deepseek" ? "Deepseek" : vendor === "grok" ? "Grok" : vendor === "google" ? "Google AI Studio" : (vendor || "").toUpperCase();
   const vendorBadgeClass = vendor === "openai"
     ? "bg-purple-100 text-purple-800"
+    : vendor === "anthropic"
+    ? "bg-emerald-100 text-emerald-800"
     : vendor === "deepseek"
     ? "bg-teal-100 text-teal-800"
     : vendor === "grok"
     ? "bg-amber-100 text-amber-800"
+    : vendor === "google"
+    ? "bg-blue-100 text-blue-800"
     : "bg-gray-100 text-gray-800";
   const teamBadge = vendor === "grok" && a.teamId
     ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">Team: ${a.teamId}</span>`
     : "";
   const extraInfo = vendor === "grok" && a.teamId
     ? `Team: ${a.teamId}`
+    : vendor === "google" && a.billingAccountId
+    ? `Billing Account: ${a.billingAccountId}`
     : ""; // Future: show Org ID if stored for OpenAI
   return `
     <div class="balance-card border border-gray-200 rounded-xl p-5 fade-in">
@@ -313,7 +324,7 @@ function accountCardHTML(a) {
       </div>
 
       <div class="mt-4 grid grid-cols-1 gap-3">
-        ${vendor === "openai" ? `
+        ${vendor === "openai" || vendor === "anthropic" ? `
           <div class="bg-gray-50 rounded-lg p-4 text-center">
             <div class="text-xs text-gray-500">Used (range)</div>
             <div class="text-xl font-semibold text-gray-800">${hasUsed ? formatUSD(used) : "—"}</div>
@@ -503,8 +514,7 @@ async function handleMasterAuthLogin() {
       const profile = { email, apps, password_key: passwordKey, session: res.session || null };
       saveMasterAuthProfile(profile);
       updateAuthFormFromProfile();
-      setAuthStatus("Login successful. Syncing dashboard data...", "info");
-      await synchronizeWithCloud(profile, "login");
+      setAuthStatus("Login successful.", "success");
       updateAuthLastSyncLabel();
       updateAuthUI();
     } else {
@@ -536,54 +546,11 @@ function stableStringify(obj) {
 }
 
 async function handleMasterAuthLogout() {
-  // Best-effort sync on logout if data changed
   const profile = getMasterAuthProfile();
-  const passwordKey = getPasswordKeyCookie();
-  if (!profile || !profile.email || !passwordKey) {
-    // Nothing to do, just clear any cookie and reset UI
-    clearPasswordKeyCookie();
-    saveMasterAuthProfile({ email: (profile && profile.email) || "", apps: getDefaultAppIdentifier(), password_key: null, session: null });
-    updateAuthUI();
-    setAuthStatus("Logged out.", "success");
-    return;
-  }
-
-  setAuthBusy(true);
-  try {
-    const payload = { email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: passwordKey };
-    let remoteData = null;
-    try {
-      const res = await masterAuthRequest("config/app", "GET", payload);
-      remoteData = normalizeRemoteAppData(res.data);
-    } catch (e) {
-      // ignore fetch error here; we'll still try to upload if needed
-      remoteData = null;
-    }
-
-    const localData = collectAppDataForUpload();
-    const localStr = stableStringify(localData);
-    const remoteStr = stableStringify(remoteData || {});
-    const changed = localStr !== remoteStr;
-
-    if (changed) {
-      try {
-        await masterAuthRequest("config/app", "POST", { ...payload, app_data: localData });
-        setLastSyncMeta({ direction: "upload", timestamp: Date.now(), serverTimestamp: new Date().toISOString() });
-        setAuthStatus("Changes saved to cloud. Logged out.", "success");
-        showToast("Synced just now", "success", 2200);
-      } catch (err) {
-        setAuthStatus(`Logout: failed to upload changes (${err.message}). Logged out locally.`, "warning");
-      }
-    } else {
-      setAuthStatus("No changes detected. Logged out.", "success");
-    }
-  } finally {
-    // Clear credentials regardless of upload result
-    clearPasswordKeyCookie();
-    saveMasterAuthProfile({ email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: null, session: null });
-    updateAuthUI();
-    setAuthBusy(false);
-  }
+  clearPasswordKeyCookie();
+  saveMasterAuthProfile({ email: (profile && profile.email) || "", apps: getDefaultAppIdentifier(), password_key: null, session: null });
+  updateAuthUI();
+  setAuthStatus("Logged out.", "success");
 }
 
 function parseRemoteTimestamp(value) {
@@ -644,6 +611,59 @@ async function synchronizeWithCloud(profile, reason = "auto") {
   }
 }
 
+// Manual Upload/Download handlers
+async function handleMasterAuthUpload() {
+  const profile = getMasterAuthProfile();
+  const passwordKey = getPasswordKeyCookie();
+  if (!profile || !profile.email || !passwordKey) {
+    setAuthStatus("Login required before uploading.", "warning");
+    return;
+  }
+  const confirmed = confirm("Upload will send your local API configs to the cloud server. This may expose API keys to the backup service. Proceed?");
+  if (!confirmed) return;
+  setAuthBusy(true);
+  try {
+    const appData = collectAppDataForUpload();
+    const payload = { email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: passwordKey, app_data: appData };
+    await masterAuthRequest("config/app", "POST", payload);
+    setLastSyncMeta({ direction: "upload", timestamp: Date.now(), serverTimestamp: new Date().toISOString() });
+    setAuthStatus("Uploaded local data to cloud.", "success");
+    showToast("Upload completed", "success", 2200);
+  } catch (err) {
+    setAuthStatus(`Upload failed: ${err.message}`, "error");
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+async function handleMasterAuthDownload() {
+  const profile = getMasterAuthProfile();
+  const passwordKey = getPasswordKeyCookie();
+  if (!profile || !profile.email || !passwordKey) {
+    setAuthStatus("Login required before downloading.", "warning");
+    return;
+  }
+  const confirmed = confirm("Download will replace all local configs with the cloud version. Proceed?");
+  if (!confirmed) return;
+  setAuthBusy(true);
+  try {
+    const res = await masterAuthRequest("config/app", "GET", { email: profile.email, apps: profile.apps || getDefaultAppIdentifier(), password_key: passwordKey });
+    const remoteData = normalizeRemoteAppData(res.data);
+    if (remoteData) {
+      applyRemoteAppData(remoteData);
+      setLastSyncMeta({ direction: "download", timestamp: Date.now(), serverTimestamp: res.last_sync || null });
+      setAuthStatus("Downloaded and applied cloud data.", "success");
+      showToast("Download completed", "success", 2200);
+    } else {
+      setAuthStatus("No cloud data found to download.", "info");
+    }
+  } catch (err) {
+    setAuthStatus(`Download failed: ${err.message}`, "error");
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
 async function attemptAutoSyncFromCookie() {
   const profile = getMasterAuthProfile();
   const passwordKey = getPasswordKeyCookie();
@@ -674,6 +694,20 @@ function getProxyBase() {
   const v = localStorage.getItem(CORS_PROXY_KEY);
   if (!v) return "";
   return v.replace(/\/$/, "");
+}
+
+function migrateProxyKey() {
+  try {
+    const oldKey = "openai_cors_proxy";
+    const newKey = CORS_PROXY_KEY;
+    if (!localStorage.getItem(newKey)) {
+      const oldVal = localStorage.getItem(oldKey);
+      if (oldVal) {
+        localStorage.setItem(newKey, oldVal);
+        localStorage.removeItem(oldKey);
+      }
+    }
+  } catch {}
 }
 
 // Build a URL that optionally routes via a CORS proxy.
@@ -916,10 +950,123 @@ async function fetchUsageRangeWithAdminKey(adminKey, range = getRangeSetting()) 
   }
 }
 
+// Anthropic: organization usage report (messages) summed across range
+function toISOStartOfDayUTC(dateStr) {
+  return `${dateStr}T00:00:00Z`;
+}
+
+function numberFrom(obj, keys, divisorIfCents = null) {
+  if (!obj || typeof obj !== "object") return null;
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "number" && Number.isFinite(v)) return divisorIfCents ? v / divisorIfCents : v;
+    if (typeof v === "string") {
+      const n = Number(v.replace(/[,_\s]/g, ""));
+      if (!Number.isNaN(n)) return divisorIfCents ? n / divisorIfCents : n;
+    }
+  }
+  return null;
+}
+
+function extractUsdValue(obj) {
+  if (obj == null) return null;
+  if (typeof obj === "number" && Number.isFinite(obj)) return obj;
+  if (typeof obj === "string") {
+    const n = Number(obj.replace(/[,_\s]/g, ""));
+    return Number.isNaN(n) ? null : n;
+  }
+  if (obj && typeof obj === "object") {
+    if (obj.amount && typeof obj.amount === "object") {
+      const cur = (obj.amount.currency || obj.amount.curr || obj.currency || "").toUpperCase?.() || "";
+      const val = typeof obj.amount.value === "number" ? obj.amount.value : (typeof obj.amount.val === "number" ? obj.amount.val : null);
+      if (cur === "USD" && typeof val === "number") return val;
+      // amounts sometimes in cents
+      const cents = numberFrom(obj.amount, ["cents", "amount_cents", "value_cents", "val_cents"], 100);
+      if (cur === "USD" && cents != null) return cents;
+    }
+    const direct = numberFrom(obj, [
+      "usd",
+      "cost_usd",
+      "total_usd",
+      "total_cost_usd",
+      "amount_usd",
+      "spend_usd",
+      "charges_usd",
+      "usage_usd",
+      "cost",
+      "total_cost",
+      "amount",
+    ]);
+    if (direct != null) return direct;
+    const cents = numberFrom(obj, ["amount_cents", "cost_cents", "total_cost_cents"], 100);
+    if (cents != null) return cents;
+  }
+  return null;
+}
+
+async function fetchAnthropicUsageRange(adminKey, range = getRangeSetting()) {
+  const { startStr, endStr } = computeRangeDates(range);
+  const startISO = toISOStartOfDayUTC(startStr);
+  // ending_at exclusive: next day 00:00Z
+  const endISO = toISOStartOfDayUTC(addDaysStr(endStr, 1));
+  const host = "https://api.anthropic.com";
+  const path = `/v1/organizations/usage_report/messages?starting_at=${encodeURIComponent(startISO)}&ending_at=${encodeURIComponent(endISO)}&bucket_width=1d`;
+  const url = host.replace(/\/$/, "") + path;
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "GET",
+      headers: {
+        "anthropic-version": "2023-06-01",
+        "x-api-key": adminKey,
+        Accept: "application/json",
+      }
+    },
+    20000
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    try { console.error("[Anthropic] usage_report error", { status: res.status, body: text }); } catch {}
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  try { console.log("[Anthropic] /v1/organizations/usage_report/messages payload", data); } catch {}
+
+  let totalUsd = 0;
+  let found = false;
+
+  // Prefer bucketed totals
+  if (data && Array.isArray(data.buckets)) {
+    for (const b of data.buckets) {
+      const v = extractUsdValue(b?.total) ?? extractUsdValue(b);
+      if (v != null) { totalUsd += Number(v || 0); found = true; }
+    }
+  }
+
+  // Try totals at top level
+  if (!found && data && typeof data === "object") {
+    const v = extractUsdValue(data.total) ?? extractUsdValue(data.summary) ?? extractUsdValue(data);
+    if (v != null) { totalUsd += Number(v || 0); found = true; }
+  }
+
+  // Some APIs return data array
+  if (!found && Array.isArray(data?.data)) {
+    for (const row of data.data) {
+      const v = extractUsdValue(row?.total) ?? extractUsdValue(row);
+      if (v != null) { totalUsd += Number(v || 0); found = true; }
+    }
+  }
+
+  if (!found) {
+    try { console.warn("[Anthropic] Could not locate USD fields in response."); } catch {}
+  }
+  return { granted: null, used: totalUsd, available: null };
+}
+
 // Deepseek: simple balance endpoint. Returns available credit/balance.
 async function fetchDeepseekBalance(token) {
   const host = "https://api.deepseek.com";
-  const url = buildProxiedUrl(host, "/user/balance");
+  const url = host.replace(/\/$/, "") + "/user/balance";
   const res = await fetchWithTimeout(
     url,
     {
@@ -927,8 +1074,7 @@ async function fetchDeepseekBalance(token) {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
-      },
-      mode: "cors",
+      }
     },
     20000
   );
@@ -1050,6 +1196,38 @@ async function fetchGrokPrepaidBalance(token, teamId) {
   return { granted: null, used: null, available };
 }
 
+// Google AI Studio via GDC Billing Pricing API: Pricing API does not provide balances.
+// We return a structured error and placeholder values.
+async function fetchGooglePricingBalance(apiKey, billingAccountId) {
+  // Validate inputs
+  if (!billingAccountId) throw new Error("Missing Google Billing Account ID");
+  if (!apiKey) throw new Error("Missing Google API key");
+
+  // Attempt a lightweight call to verify API key works: list services
+  // Endpoint: https://cloudbilling.googleapis.com/v1/services?key=API_KEY
+  // Note: cross-origin requests may be blocked; recommend using a proxy.
+  const host = "https://cloudbilling.googleapis.com";
+  const url = buildProxiedUrl(host, `/v1/services?key=${encodeURIComponent(apiKey)}`);
+  try {
+    const res = await fetchWithTimeout(
+      url,
+      { method: "GET", headers: { Accept: "application/json" }, mode: "cors" },
+      20000
+    );
+    // Ignore body; the goal is connectivity.
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Pricing API HTTP ${res.status}${text ? `: ${text.slice(0, 120)}` : ""}`);
+    }
+  } catch (err) {
+    const corsHint = String(err && err.message || "").includes("Failed to fetch") ? " • CORS blocked: set a proxy in localStorage key 'cors_proxy'" : "";
+    throw new Error(`Google Pricing API check failed: ${err.message}${corsHint}`);
+  }
+
+  // Informative placeholder: Pricing API does not expose balances.
+  return { granted: null, used: null, available: null };
+}
+
 // Removed session token path
 
 async function refreshOne(id, showModal) {
@@ -1064,6 +1242,10 @@ async function refreshOne(id, showModal) {
         bal = await fetchDeepseekBalance(acct.adminKey);
       } else if (vendor === "grok") {
         bal = await fetchGrokPrepaidBalance(acct.adminKey, acct.teamId);
+      } else if (vendor === "google") {
+        bal = await fetchGooglePricingBalance(acct.adminKey, acct.billingAccountId);
+      } else if (vendor === "anthropic") {
+        bal = await fetchAnthropicUsageRange(acct.adminKey);
       } else {
         bal = await fetchUsageRangeWithAdminKey(acct.adminKey);
       }
@@ -1073,7 +1255,7 @@ async function refreshOne(id, showModal) {
     updateAccount(id, { balance: bal, lastUpdated: Date.now(), error: null });
   } catch (e) {
     let errMsg = String(e && e.message ? e.message : e);
-    const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'openai_cors_proxy'" : "";
+    const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'cors_proxy'" : "";
     if ((acct.vendor || "openai") === "grok") {
       const ip = await fetchPublicIP();
       if (ip) errMsg += ` • Public IP: ${ip} (whitelist for Grok)`;
@@ -1098,6 +1280,10 @@ async function refreshAllSequential() {
           bal = await fetchDeepseekBalance(a.adminKey);
         } else if (vendor === "grok") {
           bal = await fetchGrokPrepaidBalance(a.adminKey, a.teamId);
+        } else if (vendor === "google") {
+          bal = await fetchGooglePricingBalance(a.adminKey, a.billingAccountId);
+        } else if (vendor === "anthropic") {
+          bal = await fetchAnthropicUsageRange(a.adminKey);
         } else {
           bal = await fetchUsageRangeWithAdminKey(a.adminKey);
         }
@@ -1105,7 +1291,7 @@ async function refreshAllSequential() {
       updateAccount(a.id, { balance: bal, lastUpdated: Date.now(), error: null });
     } catch (e) {
       let errMsg = String(e && e.message ? e.message : e);
-      const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'openai_cors_proxy'" : "";
+      const corsHint = errMsg.includes("Failed to fetch") || errMsg.includes("Network/CORS") ? " • CORS blocked: set a proxy in localStorage key 'cors_proxy'" : "";
       if ((a.vendor || "openai") === "grok") {
         const ip = await fetchPublicIP();
         if (ip) errMsg += ` • Public IP: ${ip} (whitelist for Grok)`;
@@ -1125,6 +1311,7 @@ function initEvents() {
       const adminKey = (els.adminKey && els.adminKey.value || "").trim();
       const vendor = (els.vendor && els.vendor.value) || "openai";
       const teamId = (els.teamId && els.teamId.value || "").trim();
+      const billingAccountId = (els.gdcBillingAccountId && els.gdcBillingAccountId.value || "").trim();
       if (!name) return;
       if (!adminKey) {
         alert("Provide an API key.");
@@ -1134,10 +1321,15 @@ function initEvents() {
         alert("Provide the Grok Team ID.");
         return;
       }
-      const id = addAccount(name, adminKey, vendor, { teamId });
+      if (vendor === "google" && !billingAccountId) {
+        alert("Provide the Google Billing Account ID.");
+        return;
+      }
+      const id = addAccount(name, adminKey, vendor, { teamId, billingAccountId });
       els.name.value = "";
       if (els.adminKey) els.adminKey.value = "";
       if (els.teamId) els.teamId.value = "";
+      if (els.gdcBillingAccountId) els.gdcBillingAccountId.value = "";
       if (els.addKeyModal) els.addKeyModal.classList.add("hidden");
       render();
       await refreshOne(id, true);
@@ -1176,6 +1368,9 @@ function initEvents() {
   if (els.openAddKeyModal && els.addKeyModal) {
     els.openAddKeyModal.addEventListener("click", () => {
       els.addKeyModal.classList.remove("hidden");
+      const v = (els.vendor && els.vendor.value) || "openai";
+      if (els.teamIdRow) els.teamIdRow.classList.toggle("hidden", v !== "grok");
+      if (els.gdcBillingAccountRow) els.gdcBillingAccountRow.classList.toggle("hidden", v !== "google");
     });
   }
   if (els.closeAddKeyModal) {
@@ -1210,6 +1405,21 @@ function initEvents() {
     });
   }
 
+  // Toggle Team ID field for Grok provider
+  if (els.vendor && els.teamIdRow) {
+    els.vendor.addEventListener("change", () => {
+      const v = els.vendor.value;
+      els.teamIdRow.classList.toggle("hidden", v !== "grok");
+      if (els.gdcBillingAccountRow) els.gdcBillingAccountRow.classList.toggle("hidden", v !== "google");
+      if (v !== "grok" && els.teamId) {
+        els.teamId.value = "";
+      }
+      if (v !== "google" && els.gdcBillingAccountId) {
+        els.gdcBillingAccountId.value = "";
+      }
+    });
+  }
+
   // MasterAuth events
   if (els.authRegister) {
     els.authRegister.addEventListener("click", (e) => {
@@ -1229,9 +1439,22 @@ function initEvents() {
       handleMasterAuthLogout();
     });
   }
+  if (els.authUpload) {
+    els.authUpload.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthUpload();
+    });
+  }
+  if (els.authDownload) {
+    els.authDownload.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleMasterAuthDownload();
+    });
+  }
 }
 
 function init() {
+  migrateProxyKey();
   render();
   initEvents();
   updateRangeLabel();
@@ -1239,7 +1462,7 @@ function init() {
   updateAuthFormFromProfile();
   updateAuthLastSyncLabel();
   updateAuthUI();
-  attemptAutoSyncFromCookie();
+  // Auto-sync disabled; use Upload/Download buttons instead
 }
 
 document.addEventListener("DOMContentLoaded", init);
