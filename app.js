@@ -290,13 +290,15 @@ function accountCardHTML(a) {
   const err = a.error ? String(a.error) : "";
 
   const secretForLabel = a.adminKey || "";
-  const vendorName = vendor === "openai" ? "OpenAI" : vendor === "anthropic" ? "Anthropic" : vendor === "deepseek" ? "Deepseek" : vendor === "grok" ? "Grok" : vendor === "google" ? "Google AI Studio" : (vendor || "").toUpperCase();
+  const vendorName = vendor === "openai" ? "OpenAI" : vendor === "anthropic" ? "Anthropic" : vendor === "deepseek" ? "Deepseek" : vendor === "moonshot" ? "Moonshot (KIMI)" : vendor === "grok" ? "Grok" : vendor === "google" ? "Google AI Studio" : (vendor || "").toUpperCase();
   const vendorBadgeClass = vendor === "openai"
     ? "bg-purple-100 text-purple-800"
     : vendor === "anthropic"
     ? "bg-emerald-100 text-emerald-800"
     : vendor === "deepseek"
     ? "bg-teal-100 text-teal-800"
+    : vendor === "moonshot"
+    ? "bg-pink-100 text-pink-800"
     : vendor === "grok"
     ? "bg-amber-100 text-amber-800"
     : vendor === "google"
@@ -1146,6 +1148,54 @@ async function fetchDeepseekBalance(token) {
   return { granted: null, used: null, available };
 }
 
+// Moonshot (KIMI): simple balance endpoint. Returns available, voucher, and cash balances.
+async function fetchMoonshotBalance(token) {
+  const host = "https://api.moonshot.ai";
+  const url = buildProxiedUrl(host, "/v1/users/me/balance");
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      mode: "cors",
+    },
+    20000
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    try { console.error("[Moonshot] balance error", { status: res.status, body: text }); } catch {}
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  const payload = await res.json().catch(() => ({}));
+  try { console.log("[Moonshot] /v1/users/me/balance payload", payload); } catch {}
+
+  const data = payload && (payload.data || payload);
+  const toNum = (x) => {
+    if (typeof x === "number") return x;
+    if (typeof x === "string") { const n = Number(x.replace(/[,_\s]/g, "")); return Number.isNaN(n) ? null : n; }
+    return null;
+  };
+  let available = null;
+  if (data && typeof data === "object") {
+    available = toNum(data.available_balance);
+    if (available == null) {
+      const v = toNum(data.voucher_balance);
+      const c = toNum(data.cash_balance);
+      if (v != null || c != null) available = (v || 0) + (c || 0);
+    }
+    if (available == null) {
+      available = toNum(data.balance) ?? toNum(data.available);
+    }
+  }
+
+  return { granted: null, used: null, available };
+}
+
 // Public IP helper (for Grok whitelist guidance)
 async function fetchPublicIP() {
   try {
@@ -1240,6 +1290,8 @@ async function refreshOne(id, showModal) {
     if (acct.adminKey) {
       if (vendor === "deepseek") {
         bal = await fetchDeepseekBalance(acct.adminKey);
+      } else if (vendor === "moonshot") {
+        bal = await fetchMoonshotBalance(acct.adminKey);
       } else if (vendor === "grok") {
         bal = await fetchGrokPrepaidBalance(acct.adminKey, acct.teamId);
       } else if (vendor === "google") {
@@ -1278,6 +1330,8 @@ async function refreshAllSequential() {
         const vendor = a.vendor || "openai";
         if (vendor === "deepseek") {
           bal = await fetchDeepseekBalance(a.adminKey);
+        } else if (vendor === "moonshot") {
+          bal = await fetchMoonshotBalance(a.adminKey);
         } else if (vendor === "grok") {
           bal = await fetchGrokPrepaidBalance(a.adminKey, a.teamId);
         } else if (vendor === "google") {
