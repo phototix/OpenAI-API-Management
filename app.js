@@ -1211,6 +1211,33 @@ async function fetchMoonshotBalance(token) {
   return { granted: null, used: null, available };
 }
 
+// SerpAPI: Account balance and plan information
+async function fetchSerpApiBalance(apiKey) {
+  const url = `https://serpapi.com/account?api_key=${encodeURIComponent(apiKey)}`;
+  const res = await fetchWithTimeout(url, { method: "GET" }, 20000);
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    try { console.error("[SerpAPI] account error", { status: res.status, body: text }); } catch {}
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  const data = await res.json();
+  try { console.log("[SerpAPI] /account payload", data); } catch {}
+
+  // Extract searches left and plan name
+  const searchesLeft = data.total_searches_left ?? null;
+  const planName = data.plan_name ?? null;
+  
+  // Return searches left as "available" and store plan name in metadata
+  return { 
+    granted: null, 
+    used: data.this_month_usage ?? null, 
+    available: searchesLeft,
+    metadata: { planName }
+  };
+}
+
 // Public IP helper (for Grok whitelist guidance)
 async function fetchPublicIP() {
   try {
