@@ -1213,8 +1213,9 @@ async function fetchMoonshotBalance(token) {
 
 // SerpAPI: Account balance and plan information
 async function fetchSerpApiBalance(apiKey) {
-  const url = `https://serpapi.com/account?api_key=${encodeURIComponent(apiKey)}`;
-  const res = await fetchWithTimeout(url, { method: "GET" }, 20000);
+  const host = "https://serpapi.com";
+  const url = buildProxiedUrl(host, `/account?api_key=${encodeURIComponent(apiKey)}`);
+  const res = await fetchWithTimeout(url, { method: "GET", mode: "cors" }, 20000);
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
