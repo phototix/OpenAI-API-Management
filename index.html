@@ -7,7 +7,7 @@
     <meta name="description" content="Effortlessly manage and monitor your API keys and track usage balances from OpenAI, Anthropic, xAI Grok, DeepSeek, and Google AI Studio — all in one free, intuitive dashboard.">
     <link rel="canonical" href="https://api-keys.brandon.my/">
     <meta name="robots" content="index, follow">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://api.openai.com https://api.anthropic.com https://api.deepseek.com https://management-api.x.ai https://cloudbilling.googleapis.com https://api.ipify.org https://api.brandon.my https://api.moonshot.ai;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https://api.openai.com https://api.anthropic.com https://api.deepseek.com https://management-api.x.ai https://cloudbilling.googleapis.com https://api.ipify.org https://api.brandon.my https://api.moonshot.ai https://serpapi.com;">
     <meta property="og:title" content="API Key Dashboard - Monitor & Track Balances (Free)">
     <meta property="og:description" content="Monitor API usage and balances across OpenAI, Anthropic, xAI Grok, DeepSeek, and Google AI Studio from a single free dashboard.">
     <meta property="og:type" content="website">
@@ -301,6 +301,7 @@
                         <option value="deepseek">Deepseek</option>
                         <option value="grok">Grok (xAI)</option>
                         <option value="google">Google AI Studio (GDC Billing)</option>
+                        <option value="serpapi">Search API</option>
                     </select>
                 </div>
                 <div>
@@ -346,7 +347,7 @@
                 }
             });
         </script>
-    <script src="app.js?version=1.13"></script>
+    <script src="app.js?version=1.14"></script>
 
     <!-- Open AI Notes -->
     <div class="container mx-auto px-4 py-6 max-w-4xl">
@@ -418,6 +419,19 @@
                 <li>Ensure your API key has access to the <strong>GET /v1/organizations/usage_report/messages</strong> endpoint.</li>
                 <li>Usage data is fetched based on the selected date range using <code>starting_at</code> and <code>ending_at</code> parameters.</li>
                 <li>Reference: Anthropic API Documentation for Organizations Usage Report endpoint.</li>
+            </ul>
+        </section>
+    </div>
+
+    <!-- SerpAPI Notes -->
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+        <section class="bg-white rounded-2xl shadow p-5">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">SerpAPI Notes</h3>
+            <ul class="text-sm text-gray-700 list-disc pl-5 space-y-2">
+                <li>Uses the <strong>GET /account</strong> endpoint to retrieve account information.</li>
+                <li>Shows your current plan name and remaining searches (<code>total_searches_left</code>).</li>
+                <li>No date range parameters needed - displays current account status.</li>
+                <li>Reference: <a href="https://serpapi.com/account-api" class="underline text-blue-600" target="_blank">SerpAPI Account API Documentation</a>.</li>
             </ul>
         </section>
     </div>
