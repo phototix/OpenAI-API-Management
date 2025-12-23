@@ -1,12 +1,2 @@
 # Local helper scripts
 repo.bat
-
-# Node.js dependencies
-node_modules/
-npm-debug.log
-package-lock.json
-yarn.lock
-
-# Environment variables
-.env
-.env.local

@@ -708,22 +708,6 @@ async function attemptAutoSyncFromCookie() {
 }
 
 function getProxyBase() {
-  // First check if running on same origin with /proxy_api endpoint
-  if (typeof window !== 'undefined' && window.location) {
-    const origin = window.location.origin;
-    // Auto-detect internal proxy (works for both localhost and deployed domain)
-    const internalProxy = `${origin}/proxy_api?url={url}`;
-    
-    // Check localStorage preference
-    const stored = localStorage.getItem(CORS_PROXY_KEY);
-    if (stored) {
-      return stored.replace(/\/$/, "");
-    }
-    
-    // Default to internal proxy if available
-    return internalProxy;
-  }
-  
   const v = localStorage.getItem(CORS_PROXY_KEY);
   if (!v) return "";
   return v.replace(/\/$/, "");
