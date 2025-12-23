@@ -708,6 +708,22 @@ async function attemptAutoSyncFromCookie() {
 }
 
 function getProxyBase() {
+  // First check if running on same origin with /proxy_api endpoint
+  if (typeof window !== 'undefined' && window.location) {
+    const origin = window.location.origin;
+    // Auto-detect internal proxy (works for both localhost and deployed domain)
+    const internalProxy = `${origin}/proxy_api?url={url}`;
+    
+    // Check localStorage preference
+    const stored = localStorage.getItem(CORS_PROXY_KEY);
+    if (stored) {
+      return stored.replace(/\/$/, "");
+    }
+    
+    // Default to internal proxy if available
+    return internalProxy;
+  }
+  
   const v = localStorage.getItem(CORS_PROXY_KEY);
   if (!v) return "";
   return v.replace(/\/$/, "");
@@ -1357,6 +1373,9 @@ async function refreshOne(id, showModal) {
       const ip = await fetchPublicIP();
       if (ip) errMsg += ` • Public IP: ${ip} (whitelist for Grok)`;
     }
+    if ((acct.vendor || "openai") === "serpapi" && (errMsg.includes("Failed to fetch") || errMsg.includes("CORS"))) {
+      errMsg = "SerpAPI requires CORS proxy. Set 'cors_proxy' in localStorage (e.g., https://corsproxy.io/?{url})";
+    }
     updateAccount(id, { error: errMsg + corsHint, lastUpdated: Date.now() });
   } finally {
     render();
@@ -1396,6 +1415,9 @@ async function refreshAllSequential() {
       if ((a.vendor || "openai") === "grok") {
         const ip = await fetchPublicIP();
         if (ip) errMsg += ` • Public IP: ${ip} (whitelist for Grok)`;
+      }
+      if ((a.vendor || "openai") === "serpapi" && (errMsg.includes("Failed to fetch") || errMsg.includes("CORS"))) {
+        errMsg = "SerpAPI requires CORS proxy. Set 'cors_proxy' in localStorage (e.g., https://corsproxy.io/?{url})";
       }
       updateAccount(a.id, { error: errMsg + corsHint, lastUpdated: Date.now() });
     }

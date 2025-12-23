@@ -347,7 +347,7 @@
                 }
             });
         </script>
-    <script src="app.js?version=1.15.2"></script>
+    <script src="app.js?version=1.15.3"></script>
 
     <!-- Open AI Notes -->
     <div class="container mx-auto px-4 py-6 max-w-4xl">
@@ -432,6 +432,12 @@
                 <li>The dashboard displays your <strong>plan name</strong> (e.g., "Big Data Plan") and <strong>total searches left</strong>.</li>
                 <li>Also shown: <em>this_month_usage</em> indicating searches consumed in the current billing period.</li>
                 <li>No date range parameters are needed; SerpAPI returns current account status.</li>
+                <li><strong>CORS Proxy Required:</strong> SerpAPI does not support CORS from browsers. Choose one option:
+                    <ul class="mt-2 space-y-1">
+                        <li><strong>Option 1 (Recommended):</strong> Use the built-in proxy server: <code>npm install && npm start</code> then open <code>http://localhost:3000</code></li>
+                        <li><strong>Option 2:</strong> Configure external proxy: <code>localStorage.setItem('cors_proxy', 'https://corsproxy.io/?{url}')</code></li>
+                    </ul>
+                </li>
                 <li>Reference: SerpAPI Account API Documentation at <a href="https://serpapi.com/account-api" class="underline" target="_blank" rel="noopener">https://serpapi.com/account-api</a>.</li>
             </ul>
         </section>
