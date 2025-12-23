@@ -304,7 +304,7 @@ function accountCardHTML(a) {
     : vendor === "google"
     ? "bg-blue-100 text-blue-800"
     : vendor === "serpapi"
-    ? "bg-indigo-100 text-indigo-800"
+    ? "bg-green-100 text-green-800"
     : "bg-gray-100 text-gray-800";
   const teamBadge = vendor === "grok" && a.teamId
     ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">Team: ${a.teamId}</span>`
@@ -313,8 +313,8 @@ function accountCardHTML(a) {
     ? `Team: ${a.teamId}`
     : vendor === "google" && a.billingAccountId
     ? `Billing Account: ${a.billingAccountId}`
-    : vendor === "serpapi" && a.balance && a.balance.planName
-    ? `Plan: ${a.balance.planName}`
+    : vendor === "serpapi" && a.balance && a.balance.metadata && a.balance.metadata.planName
+    ? `Plan: ${a.balance.metadata.planName}`
     : ""; // Future: show Org ID if stored for OpenAI
   return `
     <div class="balance-card border border-gray-200 rounded-xl p-5 fade-in">
@@ -340,6 +340,12 @@ function accountCardHTML(a) {
             <div class="text-xs text-gray-500">Searches Left</div>
             <div class="text-xl font-semibold text-gray-800">${hasAvailable ? available.toLocaleString() : "—"}</div>
           </div>
+          ${hasUsed ? `
+          <div class="bg-gray-50 rounded-lg p-4 text-center">
+            <div class="text-xs text-gray-500">Used This Month</div>
+            <div class="text-xl font-semibold text-gray-800">${used.toLocaleString()}</div>
+          </div>
+          ` : ""}
         ` : `
           <div class="bg-gray-50 rounded-lg p-4 text-center">
             <div class="text-xs text-gray-500">Available</div>
@@ -1203,43 +1209,6 @@ async function fetchMoonshotBalance(token) {
   }
 
   return { granted: null, used: null, available };
-}
-
-// SerpAPI: account balance and plan information
-async function fetchSerpApiBalance(apiKey) {
-  const host = "https://serpapi.com";
-  const url = `${host}/account?api_key=${encodeURIComponent(apiKey)}`;
-  const res = await fetchWithTimeout(
-    url,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-      mode: "cors",
-    },
-    20000
-  );
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    try { console.error("[SerpAPI] account error", { status: res.status, body: text }); } catch {}
-    throw new Error(`HTTP ${res.status}`);
-  }
-
-  const data = await res.json();
-  try { console.log("[SerpAPI] /account payload", data); } catch {}
-
-  // Extract plan_name and total_searches_left
-  const planName = data.plan_name || null;
-  const searchesLeft = typeof data.total_searches_left === "number" ? data.total_searches_left : null;
-  
-  return { 
-    granted: null, 
-    used: null, 
-    available: searchesLeft,
-    planName: planName
-  };
 }
 
 // Public IP helper (for Grok whitelist guidance)

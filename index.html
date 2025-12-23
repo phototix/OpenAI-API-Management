@@ -347,7 +347,7 @@
                 }
             });
         </script>
-    <script src="app.js?version=1.14"></script>
+    <script src="app.js?version=1.15.1"></script>
 
     <!-- Open AI Notes -->
     <div class="container mx-auto px-4 py-6 max-w-4xl">
@@ -428,10 +428,11 @@
         <section class="bg-white rounded-2xl shadow p-5">
             <h3 class="text-lg font-semibold text-gray-800 mb-2">SerpAPI Notes</h3>
             <ul class="text-sm text-gray-700 list-disc pl-5 space-y-2">
-                <li>Uses the <strong>GET /account</strong> endpoint to retrieve account information.</li>
-                <li>Shows your current plan name and remaining searches (<code>total_searches_left</code>).</li>
-                <li>No date range parameters needed - displays current account status.</li>
-                <li>Reference: <a href="https://serpapi.com/account-api" class="underline text-blue-600" target="_blank">SerpAPI Account API Documentation</a>.</li>
+                <li>Use the <strong>GET /account</strong> endpoint to retrieve account information, plan details, and search credit balance.</li>
+                <li>The dashboard displays your <strong>plan name</strong> (e.g., "Big Data Plan") and <strong>total searches left</strong>.</li>
+                <li>Also shown: <em>this_month_usage</em> indicating searches consumed in the current billing period.</li>
+                <li>No date range parameters are needed; SerpAPI returns current account status.</li>
+                <li>Reference: SerpAPI Account API Documentation at <a href="https://serpapi.com/account-api" class="underline" target="_blank" rel="noopener">https://serpapi.com/account-api</a>.</li>
             </ul>
         </section>
     </div>
